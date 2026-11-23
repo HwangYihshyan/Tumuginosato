@@ -1,39 +1,158 @@
 #include "Game.h"
 
 // ------------------------------------------------------------------
-// キャラクター・敵のデータ
+// キャラクター・武器・敵のデータ
 // ------------------------------------------------------------------
-static const CharDef kChars[2] = {
-    // name     weapon         spare     hp   spd  reach arc   dmg            dur                  cReach cArc cDmg maxDur badger
-    { L"ソラ", L"大糸切り鋏", L"縫い針", 100, 5.4f, 2.0f, 120, { 10, 11, 17 }, { 0.30f, 0.30f, 0.46f }, 2.7f, 220, 34, 60, false },
-    { L"クロベエ", L"古いひも通し", L"小槌", 130, 4.7f, 3.6f, 50, { 9, 10, 15 }, { 0.42f, 0.42f, 0.55f }, 5.5f, 40, 26, 50, true },
+static const CharDef kChars[3] = {
+    // name        spare     hp   spd   reach  arc               dmg              dur                     cReach cArc cDmg hitFrac badger ranged
+    { L"ソラ",     L"縫い針", 100, 5.4f, 2.9f, { 150, 150, 70 }, { 11, 12, 20 }, { 0.36f, 0.36f, 0.56f }, 3.3f, 110, 38, 0.35f, false, false },
+    { L"クロベエ", L"小槌",   130, 4.7f, 4.2f, { 120, 120, 160 }, { 10, 10, 16 }, { 0.5f, 0.5f, 0.66f },  0, 0, 0,     0.5f,  true,  false },
+    { L"カイリ",   L"まち針", 90,  5.2f, 9.0f, { 14, 14, 30 },   { 8, 8, 7 },    { 0.32f, 0.32f, 0.5f },  14, 10, 32,  0.4f,  false, true },
 };
 
-struct EDef { const wchar_t* name; float hp, speed, notice, atkRange, windup, atkDur, recover, dmg, radius, cd; };
-static const EDef kEDefs[4] = {
-    { L"霧ネズミ",   28, 3.3f, 9, 4.2f, 0.55f, 0.42f, 0.6f, 8, 0.45f, 1.4f },
-    { L"根っこ人形", 46, 2.1f, 8, 1.7f, 0.6f, 0.35f, 0.7f, 12, 0.5f, 1.5f },
-    { L"胞子",       24, 1.7f, 10, 9.f, 0.7f, 0.25f, 0.8f, 7, 0.45f, 2.2f },
-    { L"ほつれ蜘蛛", 340, 2.5f, 30, 4.5f, 0.85f, 0.5f, 0.9f, 16, 1.7f, 1.1f },
+const WeaponDef kWeapons[W_COUNT] = {
+    { L"大糸切り鋏",     0, 1.0f,  60, 0, L"ソラの最初の武器。開いて挟み、一本の刃で振り抜く" },
+    { L"緋糸切り",       0, 1.25f, 55, 1, L"火の力を帯びた鋏。根っこ人形と蜘蛛によく効く" },
+    { L"水糸切り",       0, 1.2f,  70, 2, L"水の力を帯びた鋏。胞子とネズミによく効く" },
+    { L"古いひも通し",   1, 1.0f,  50, 0, L"クロベエの最初の武器。投げて扇形に薙ぎ払い、引き戻す" },
+    { L"炭火のひも通し", 1, 1.3f,  55, 1, L"炭火で焼き締めたひも通し" },
+    { L"ミシン針",       2, 1.0f,  70, 0, L"カイリの最初の武器。指の間に挟んで投げる" },
+    { L"潮目の針",       2, 1.25f, 75, 2, L"潮の流れを宿した針" },
+};
+
+const AttachDef kAttach[AT_COUNT] = {
+    { L"硬い石",   L"攻撃 +15%" },
+    { L"火の欠片", L"攻撃 +10%・火の力を帯びる" },
+    { L"軽い羽",   L"移動 +12%" },
+    { L"鋼糸",     L"耐久が減りにくい（40%）" },
+};
+
+struct EDef { const wchar_t* name; float hp, speed, notice, atkRange, windup, atkDur, recover, dmg, radius, cd; int weak; };
+static const EDef kEDefs[(int)EType::COUNT] = {
+    { L"霧ネズミ",   28, 3.3f, 9, 4.2f, 0.55f, 0.42f, 0.6f, 8, 0.45f, 1.4f, 2 },
+    { L"根っこ人形", 46, 2.1f, 8, 1.7f, 0.6f, 0.35f, 0.7f, 12, 0.5f, 1.5f, 1 },
+    { L"胞子",       24, 1.7f, 10, 9.f, 0.7f, 0.25f, 0.8f, 7, 0.45f, 2.2f, 2 },
+    { L"ほつれ蜘蛛", 340, 2.5f, 30, 4.5f, 0.85f, 0.5f, 0.9f, 16, 1.7f, 1.1f, 1 },
+    { L"大樹の番人", 650, 1.5f, 40, 6.0f, 1.0f, 0.55f, 1.0f, 18, 2.2f, 1.3f, 1 },
+    { L"根の主の腕", 400, 0.f, 40, 0.f, 9, 9, 9, 0, 2.5f, 99, 0 },
+    { L"糸喰い蛾",   34, 2.8f, 11, 8.5f, 0.6f, 0.25f, 0.7f, 8, 0.45f, 1.8f, 1 },     // 飛び回り、2発の糸玉を撃つ
+    { L"影法師",     52, 4.2f, 10, 5.5f, 0.45f, 0.38f, 0.5f, 11, 0.45f, 1.2f, 2 },   // 2回続けて突進する
+    { L"根の鎧武者", 130, 1.9f, 9, 2.3f, 0.8f, 0.45f, 0.8f, 16, 0.6f, 1.6f, 1 },     // 正面からの攻撃を半分受け流す
+    { L"うつろ",     733, 2.4f, 40, 9.f, 0.9f, 0.6f, 0.8f, 18, 1.6f, 1.2f, 0 },     // 12階のQTE・15階のボス（体力は前の2/3）
 };
 
 const CharDef& Game::Def(const Actor& a) const { return kChars[a.def]; }
+const wchar_t* EnemyName(EType t) { return kEDefs[(int)t].name; }
+
+// 各階の糸巻きから出るジオラマパーツ（ふつうの階は10個ずつ12階ぶん＝120個、12階のQTEのあとにカイリ1個）
+//   はめ込み枠の合計（村長を除いて29）と、はめ込みパーツの数（29。余っていた酒樽2つは川にした）をそろえてある。ボスの階（5・15）は宝箱なし
+#define SB(s) (SUB_ID + (s))
+const FloorLootDef kFloorLoot[MAX_FLOOR + 1] = {
+    { { -1 } },
+    { { P_Shop, SB(S_Merchant), SB(S_Sign), SB(S_Barrel), SB(S_Noren), SB(S_Pot), P_Path, P_Path, P_Tree, P_Lantern } },          // 1階：商店一式
+    { { P_Kiln, SB(S_Wood), SB(S_Wood), SB(S_Lamp), P_HouseKurobee, P_Path, P_Tree, P_Tree, P_River, P_Bridge } },                 // 2階：炭焼き窯一式（→クロベエ）
+    { { P_Loom, SB(S_Weaver), SB(S_Noren), SB(S_Lamp), P_Cloth, P_Tree, P_Tree, P_Lantern, P_Path, P_River } },                     // 3階：機織り小屋一式
+    { { SB(S_Noren), SB(S_Wood), SB(S_Sign), P_Well, P_River, P_Tree, P_Tree, P_Path, P_Path, P_Lantern } },                  // 4階：クロベエの家の飾り・井戸
+    { { -1 } },                                                                                                                      // 5階：中ボス（宝箱なし）
+    { { P_HouseRabbit, SB(S_Rabbits), SB(S_Pot), SB(S_Wood), P_Field, SB(S_Pot), P_Tree, P_Tree, P_Path, P_River } },             // 6階
+    { { P_Forge, SB(S_Smith), SB(S_Barrel), SB(S_Sign), P_Tree, P_Tree, P_Lantern, P_Path, P_Path, P_River } },                    // 7階：鍛冶屋一式
+    { { P_Wheel, P_Well, P_River, P_Bridge, P_River, P_Tree, P_Tree, P_Lantern, P_Path, P_Path } },                           // 8階：水車
+    { { P_HouseVillager, SB(S_Villager), SB(S_Child), SB(S_Lamp), P_Field, SB(S_Pot), P_Tree, P_Lantern, P_Path, P_River } },      // 9階
+    { { P_HouseVillager, SB(S_Villager), SB(S_Child), SB(S_Lamp), P_Cloth, P_Tree, P_Tree, P_Lantern, P_Path, P_Bridge } },        // 10階
+    { { P_Tree, P_Tree, P_Tree, P_Lantern, P_Lantern, P_Path, P_Path, P_Path, P_River, P_Bridge } },                                // 11階
+    { { SB(S_Kairi), -1 } },                                                                                                           // 12階：QTE のあとに出る「カイリ」
+    { { P_Tree, P_Tree, P_Tree, P_Lantern, P_Lantern, P_Lantern, P_Path, P_Path, P_Path, P_River } },                              // 13階
+    { { P_Tree, P_Tree, P_Tree, P_Lantern, P_Lantern, P_Path, P_Path, P_Path, P_Path, P_River } },                                 // 14階
+    { { -1 } },                                                                                                                      // 15階：うつろ（宝箱なし）
+};
+#undef SB
+
+// その階の k 番目（0〜9）のパーツの番号（無ければ -1）
+static int LootId(int floor, int k)
+{
+    if (floor < 1 || floor > MAX_FLOOR || k < 0 || k >= LOOT_N) return -1;
+    for (int i = 0; i <= k; i++) if (kFloorLoot[floor].ids[i] < 0) return -1;   // -1 から先は無し
+    return kFloorLoot[floor].ids[k];
+}
+static bool LootValid(int floor, int k) { return LootId(floor, k) >= 0; }
+
+int Game::LootTotal(int floor) const
+{
+    int n = 0;
+    for (int k = 0; k < LOOT_N; k++) if (LootValid(floor, k)) n++;
+    return n;
+}
+
+int Game::LootLeft(int floor) const
+{
+    if (floor < 1 || floor > MAX_FLOOR) return 0;
+    int n = 0;
+    for (int k = 0; k < LOOT_N; k++) if (LootValid(floor, k) && !((floorGot[floor] >> k) & 1)) n++;
+    return n;
+}
+
+// 糸巻きを1つほどく：その糸巻きのジオラマパーツを1つ手に入れる
+void Game::TakeLoot(int floor, int k)
+{
+    if (!LootValid(floor, k) || ((floorGot[floor] >> k) & 1)) return;
+    floorGot[floor] |= (unsigned short)(1u << k);
+    int id = LootId(floor, k);
+    std::wstring name;
+    if (id >= SUB_ID) { subInv[id - SUB_ID]++; name = std::wstring(kSubs[id - SUB_ID].name) + L"（はめ込み）"; }
+    else { inventory[id]++; name = kParts[id].name; }
+    crystalsThisRun++;
+    int left = LootLeft(floor);
+    if (left == 0) floorLoot |= 1u << floor;
+    ToastMsg(L"糸がほどけた！ ジオラマパーツ：" + name, RGBA(0.6f, 0.95f, 1));
+    ToastMsg(left == 0 ? std::wstring(L"この階のジオラマパーツを全部集めた！") : L"この階の糸巻き　あと " + std::to_wstring(left) + L" 個", left == 0 ? RGBA(1, 0.85f, 0.4f) : RGBA(0.8f, 0.95f, 1));
+}
 
 // ------------------------------------------------------------------
 // 地形
 // ------------------------------------------------------------------
 bool Game::Solid(float x, float z) const
 {
-    return SolidCell((int)std::floor(x / CELL), (int)std::floor(z / CELL));
+    if (scene == SceneId::Village) return VillageSolid(x, z);
+    if (scene == SceneId::Interior)
+    {
+        bool doorway = std::fabs(x) < 1.0f && z > -3.6f;     // 手前の出口は歩いて抜けられる
+        if (x < -3.7f || x > 3.7f || (z < -2.9f && !doorway) || z > 2.6f) return true;
+        for (auto& s : roomSolids) if (x > s.x && x < s.z && z > s.y && z < s.w) return true;
+        return false;
+    }
+    return SolidCell((int)std::floor(x / CELL), (int)std::floor(z / CELL)) || (!pillars.empty() && PillarSolid(x, z));
 }
 
 void Game::MoveCircle(XMFLOAT3& p, float r, float dx, float dz) const
 {
     auto blocked = [&](float x, float z) {
-        return Solid(x - r, z - r) || Solid(x + r, z - r) || Solid(x - r, z + r) || Solid(x + r, z + r);
+        return Solid(x - r, z - r) || Solid(x + r, z - r) || Solid(x - r, z + r) || Solid(x + r, z + r) || PropSolid(x, z, r);
     };
+    // 万一すでに壁にめり込んでいたら、閉じ込められないように動きを許す（抜け出すまで）
+    if (blocked(p.x, p.z)) { p.x += dx; p.z += dz; return; }
     if (!blocked(p.x + dx, p.z)) p.x += dx;
     if (!blocked(p.x, p.z + dz)) p.z += dz;
+}
+
+// 通り抜けられない置き物（宝箱・糸巻き、鳥居の柱や石灯籠など）。円 r の中心が (x,z) のとき重なるか
+bool Game::PropSolid(float x, float z, float r) const
+{
+    auto hit = [&](XMFLOAT3 c, float pr) { float dx = x - c.x, dz = z - c.z; return dx * dx + dz * dz < (pr + r) * (pr + r); };
+    if (scene == SceneId::Dungeon)
+    {
+        for (auto& ch : chests) if (hit(ch.pos, ch.kind == 1 ? 0.75f : 0.6f)) return true;
+    }
+    else if (scene == SceneId::Village)
+    {
+        const XMFLOAT3 E = kEntrancePos;
+        for (int s = -1; s <= 1; s += 2)
+        {
+            if (hit(F3(E.x + s * 2.1f, 0, E.z - 3.6f), 0.3f)) return true;   // 鳥居の柱
+            if (hit(F3(E.x + s * 3.0f, 0, E.z - 5.2f), 0.45f)) return true;  // 石灯籠
+        }
+        if (hit(F3(E.x - 3.2f, 0, E.z - 3.4f), 0.25f)) return true;          // 立て札
+    }
+    return false;
 }
 
 int Game::RoomAt(XMFLOAT3 p) const
@@ -59,6 +178,7 @@ XMFLOAT3 Game::RandomFloorPos(const Room& r, float margin)
 
 XMFLOAT3 Game::PathNext(XMFLOAT3 from, XMFLOAT3 to)
 {
+    if (scene != SceneId::Dungeon) return to;
     int sx = (int)std::floor(from.x / CELL), sz = (int)std::floor(from.z / CELL);
     int tx = (int)std::floor(to.x / CELL), tz = (int)std::floor(to.z / CELL);
     if ((sx == tx && sz == tz) || SolidCell(tx, tz) || SolidCell(sx, sz)) return to;
@@ -86,26 +206,25 @@ XMFLOAT3 Game::PathNext(XMFLOAT3 from, XMFLOAT3 to)
     int n = parent[sx * DN + sz];
     if (n < 0) return to;
     int n2 = parent[n];
-    // 2マス先が直線で行けるならそちらを目指す（動きをなめらかに）
     int pick = n;
     if (n2 >= 0)
     {
         int ax = n2 / DN, az = n2 % DN;
-        if ((ax == sx || az == sz)) pick = n2;
+        if (ax == sx || az == sz) pick = n2;
     }
     return { (pick / DN + 0.5f) * CELL, 0, (pick % DN + 0.5f) * CELL };
 }
 
 // ------------------------------------------------------------------
-// フロア生成（BSP法）
+// フロア生成（BSP法。5・7・10階は固定の広間）
 // ------------------------------------------------------------------
 void Game::GenerateFloor(int floor, uint32_t seed)
 {
     rng.seed(seed);
     memset(cell, 0, sizeof(cell));
     memset(seen, 0, sizeof(seen));
-    rooms.clear(); decos.clear(); enemies.clear(); projs.clear(); pickups.clear();
-    chests.clear(); springs.clear(); fx.clear(); nums.clear();
+    rooms.clear(); decos.clear(); enemies.clear(); projs.clear(); pickups.clear(); markers.clear();
+    chests.clear(); springs.clear(); fx.clear(); nums.clear(); trail.clear();
     tokens = 0; lockIdx = -1;
 
     auto carve = [&](int x0, int z0, int x1, int z1) {
@@ -113,15 +232,17 @@ void Game::GenerateFloor(int floor, uint32_t seed)
             for (int z = std::max(1, std::min(z0, z1)); z <= std::min(DN - 2, std::max(z0, z1)); z++)
                 cell[x][z] = 1;
     };
-    bool fixed = floor == 5 || floor == 10;
+    bool fixed = floor == 5 || floor == 12 || floor == 15;     // ボスの階と QTE の階は決まった広間
     if (fixed)
     {
         Room r{ 6, 4, 18, 19 };
         rooms.push_back(r);
         carve(r.x, r.z, r.x + r.w - 1, r.z + r.h - 1);
-        // 柱
-        int pil[4][2] = { { 10, 9 }, { 19, 9 }, { 10, 17 }, { 19, 17 } };
-        for (auto& p : pil) cell[p[0]][p[1]] = 0;
+        if (floor == 5)
+        {
+            int pil[4][2] = { { 10, 9 }, { 19, 9 }, { 10, 17 }, { 19, 17 } };
+            for (auto& p : pil) cell[p[0]][p[1]] = 0;
+        }
         exitX = 15; exitZ = r.z + r.h;
     }
     else
@@ -129,7 +250,7 @@ void Game::GenerateFloor(int floor, uint32_t seed)
         struct Rc { int x, z, w, h; };
         std::vector<Rc> leaves;
         std::function<void(Rc, int)> split = [&](Rc r, int depth) {
-            bool canV = r.w >= 16, canH = r.h >= 16;
+            bool canV = r.w >= 14, canH = r.h >= 14;
             if (depth == 0 || (!canV && !canH)) { leaves.push_back(r); return; }
             bool vert = canV && (!canH || r.w > r.h || (r.w == r.h && (rng() & 1)));
             if (vert)
@@ -145,8 +266,8 @@ void Game::GenerateFloor(int floor, uint32_t seed)
                 split({ r.x, r.z + s, r.w, r.h - s }, depth - 1);
             }
         };
-        split({ 1, 1, DN - 2, DN - 2 }, 3);
-        if (leaves.size() > 6) leaves.resize(6);
+        split({ 1, 1, DN - 2, DN - 2 }, 4);      // 広いマップを細かく分けて部屋を増やす
+        if (leaves.size() > 12) leaves.resize(12);
         for (auto& l : leaves)
         {
             int rw = RandI(5, std::max(5, std::min(l.w - 2, 10)));
@@ -164,7 +285,6 @@ void Game::GenerateFloor(int floor, uint32_t seed)
             if (rng() & 1) { carve(ax, az, bx, az + 1); carve(bx, az, bx + 1, bz); }
             else { carve(ax, az, ax + 1, bz); carve(ax, bz, bx, bz + 1); }
         }
-        // 出口：スタートから最も遠い部屋の北側の壁
         int best = 1; float bd = -1;
         for (int i = 1; i < (int)rooms.size(); i++)
         {
@@ -185,40 +305,72 @@ void Game::GenerateFloor(int floor, uint32_t seed)
     exitPos = { (exitX + 0.5f) * CELL, 0, exitZ * CELL };
     exitFace = { 0, 0, 1 };
 
-    // パーティ配置
+    // 操作キャラを配置（仲間は画面に出ない）
     const Room& sr = rooms[0];
     XMFLOAT3 sp = fixed ? XMFLOAT3{ 15 * CELL, 0, 6 * CELL } : XMFLOAT3{ (sr.x + sr.w * 0.5f) * CELL, 0, (sr.z + sr.h * 0.5f) * CELL };
-    party[active].pos = sp; party[active].yaw = 0;
-    party[1 - active].pos = Add(sp, F3(1.2f, 0, -1.2f)); party[1 - active].yaw = 0;
-    if (Solid(party[1 - active].pos.x, party[1 - active].pos.z)) party[1 - active].pos = sp;
-    for (auto& a : party) { a.st = a.hp > 0 ? ASt::Normal : ASt::Down; a.kb = {}; }
+    for (int i = 0; i < 3; i++) { party[i].pos = sp; party[i].yaw = 0; party[i].kb = {}; party[i].st = party[i].hp > 0 ? ASt::Normal : ASt::Down; }
     camYaw = 0;
-    camPosNow = Add(sp, F3(0, 4.5f, -7));
+    camPosNow = Add(sp, F3(0, 10.f, -6.f));
     camTargetNow = Add(sp, F3(0, 1.3f, 0));
 
-    bool deep = floor >= 6;
+    bool deep = floor >= 9;                     // 9階から少しだけ体力が増える（強さは主に敵の種類で変える）
+    auto addChest = [&](int kind, XMFLOAT3 p) { chests.push_back({ p, RandF(-PI, PI), false, 0, kind }); };
+
+    pillars.clear(); summonT = 0;
+    wearMul = floor == 14 ? 3.f : 1.f;           // 14階：リミテッド層（武器の消耗が激しい）
     if (fixed)
     {
-        SpawnEnemy(EType::Spider, { 15 * CELL, 0, 15 * CELL }, deep);
-        enemies.back().keyHolder = true;
-        enemies.back().yaw = PI;
-        SpawnEnemy(EType::Rat, { 11 * CELL, 0, 13 * CELL }, deep);
-        SpawnEnemy(EType::Rat, { 19 * CELL, 0, 13 * CELL }, deep);
-        for (int i = 0; i < 2; i++) pickups.push_back({ PickKind::Crystal, { (9 + i * 12) * CELL, 0, 20 * CELL }, 0, false, 0 });
+        // ボスの階は、ボスだけ（ほかの敵はボスが呼び出す）。宝箱も出ない
+        // ボスを倒したあとは、ボスが現れない何もない層（出口は最初から開いている）
+        if (floor == 5 && BossCleared(5)) hasKey = true;
+        else if (floor == 15 && BossCleared(15)) hasKey = true;
+        else if (floor == 5)
+        {
+            SpawnEnemy(EType::Spider, { 15 * CELL, 0, 15 * CELL }, deep);
+            enemies.back().yaw = PI;                 // 鍵は倒すと出る宝箱に入っている
+        }
+        else if (floor == 12)
+        {
+            // QTE だけの階：敵も宝箱もいない。広間のまん中へ行くと QTE（クリアしたあとは起きず、出口は開いている）
+            eventPos = F3(15 * CELL, 0, 14 * CELL);
+            if (Done(EV_F12)) hasKey = true;
+        }
+        else
+        {
+            SpawnEnemy(EType::Utsuro, { 15 * CELL, 0, 17 * CELL }, deep);
+            enemies.back().yaw = PI; enemies.back().keyHolder = true;
+            // うつろを守る4本の糸の柱（壊せる地形）
+            const float pc[4][2] = { { 10.5f, 10.5f }, { 19.5f, 10.5f }, { 10.5f, 19.5f }, { 19.5f, 19.5f } };
+            for (auto& q : pc) pillars.push_back({ F3(q[0] * CELL, 0, q[1] * CELL), 70.f, 70.f, 0.f, true });
+        }
     }
     else
     {
+        // 階ごとに決まった顔ぶれ（深くなると新しい種類が加わる）
+        static const EType kRoster[MAX_FLOOR + 1][3] = {
+            { EType::Rat, EType::Rat, EType::Rat },
+            { EType::Rat, EType::Rat, EType::Rat },         // 1階：霧ネズミ
+            { EType::Rat, EType::Doll, EType::Rat },        // 2階：＋根っこ人形
+            { EType::Doll, EType::Spore, EType::Doll },     // 3階：＋胞子
+            { EType::Rat, EType::Spore, EType::Moth },      // 4階：＋糸喰い蛾
+            { EType::Rat, EType::Rat, EType::Rat },         // 5階（ボス）
+            { EType::Doll, EType::Moth, EType::Spore },     // 6階
+            { EType::Moth, EType::Shade, EType::Doll },     // 7階：＋影法師
+            { EType::Spore, EType::Shade, EType::Moth },    // 8階
+            { EType::Shade, EType::Knight, EType::Doll },   // 9階：＋根の鎧武者
+            { EType::Moth, EType::Knight, EType::Spore },   // 10階
+            { EType::Shade, EType::Knight, EType::Moth },   // 11階
+            { EType::Knight, EType::Shade, EType::Knight }, // 12階
+            { EType::Moth, EType::Shade, EType::Knight },   // 13階
+            { EType::Shade, EType::Knight, EType::Moth },   // 14階
+            { EType::Rat, EType::Rat, EType::Rat },         // 15階（ボス）
+        };
         for (int r = 1; r < (int)rooms.size(); r++)
         {
-            int n = RandI(2, 3) + (deep ? 1 : 0);
-            for (int i = 0; i < n; i++)
-            {
-                EType t;
-                int roll = RandI(0, 9);
-                if (floor <= 2) t = roll < 5 ? EType::Rat : EType::Doll;
-                else t = roll < 4 ? EType::Rat : roll < 7 ? EType::Doll : EType::Spore;
-                SpawnEnemy(t, RandomFloorPos(rooms[r], 1.5f), deep);
-            }
+            // 敵の数をおさえる：1部屋に1〜2体、深い階ほど1体だけの部屋が多い。1つの階で多くても12体（深い階は10体）
+            int cap = floor >= 9 ? 10 : 12;
+            int n = RandI(0, 9) < (floor >= 9 ? 6 : 4) ? 1 : 2;
+            for (int i = 0; i < n && (int)enemies.size() < cap; i++) SpawnEnemy(kRoster[floor][RandI(0, 2)], RandomFloorPos(rooms[r], 1.5f), deep);
         }
         if (!enemies.empty())
         {
@@ -226,28 +378,32 @@ void Game::GenerateFloor(int floor, uint32_t seed)
             enemies[k].keyHolder = true;
             enemies[k].hp = enemies[k].maxHp = enemies[k].maxHp * 1.4f;
         }
-        int nc = RandI(3, 4);
-        for (int i = 0; i < nc; i++)
+        if (floor == 12)
         {
-            int r = RandI(1, (int)rooms.size() - 1);
-            pickups.push_back({ PickKind::Crystal, RandomFloorPos(rooms[r], 1.4f), RandF(0, 6), false, 0 });
+            // QTE の階：マップのまん中にいちばん近い部屋でイベント。宝箱は出ない
+            XMFLOAT3 mid{ DN * CELL * 0.5f, 0, DN * CELL * 0.5f };
+            float bd = 1e9f;
+            for (int r = 1; r < (int)rooms.size(); r++)
+            {
+                XMFLOAT3 c{ (rooms[r].x + rooms[r].w * 0.5f) * CELL, 0, (rooms[r].z + rooms[r].h * 0.5f) * CELL };
+                if (DistXZ(c, mid) < bd) { bd = DistXZ(c, mid); eventPos = c; }
+            }
+            for (auto& e : enemies) if (DistXZ(e.pos, eventPos) < 7.f) { e.pos = RandomFloorPos(rooms[0], 1.5f); e.st = ESt::Idle; }
         }
-        int nch = RandI(1, 2);
-        for (int i = 0; i < nch; i++)
+        else
         {
-            int r = RandI(1, (int)rooms.size() - 1);
-            chests.push_back({ RandomFloorPos(rooms[r], 1.6f), RandF(-PI, PI), false, 0 });
+            int nch = RandI(2, 3);
+            for (int i = 0; i < nch; i++) addChest(0, RandomFloorPos(rooms[RandI(1, (int)rooms.size() - 1)], 1.6f));
+            if (floor == 2 || RandI(0, 9) < 3) addChest(1, RandomFloorPos(rooms[(int)rooms.size() - 1], 2.0f));
         }
-        if (RandI(0, 1) == 0 || floor == 7)
-        {
-            int r = RandI(0, (int)rooms.size() - 1);
-            springs.push_back({ RandomFloorPos(rooms[r], 2.2f), false });
-        }
-        // スタート部屋に1つ結晶を置き、最初の見せ場にする
-        pickups.push_back({ PickKind::Crystal, Add(sp, F3(RandF(-2, 2), 0, 3.5f)), 0, false, 0 });
-        if (Solid(pickups.back().pos.x, pickups.back().pos.z)) pickups.back().pos = Add(sp, F3(0, 0, 2));
+        if (RandI(0, 1) == 0)
+            springs.push_back({ RandomFloorPos(rooms[RandI(0, (int)rooms.size() - 1)], 2.2f), false });
     }
 
+    // ジオラマパーツの糸巻き：その階に入ると、まだ開けていないパーツの糸巻きが全部出る（1つにパーツ1つ）
+    // ボスの階（5・15）と QTE の階（12：QTE のあとに出る）は出ない
+    if (floor != 5 && floor != 12 && floor != 15) SpawnLootSpools(floor);
+    else if (floor == 12 && Done(EV_F12)) SpawnLootSpools(12);   // QTE を終えたあとに取り残した分
     // 飾り
     for (int x = 1; x < DN - 1; x++)
         for (int z = 1; z < DN - 1; z++)
@@ -307,40 +463,80 @@ void Game::SpawnEnemy(EType t, XMFLOAT3 pos, bool deep)
 }
 
 // ------------------------------------------------------------------
+// 出入り
+// ------------------------------------------------------------------
+// その階のまだ開けていない糸巻きを出す（12階は QTE のあと、イベントの場所に）
+void Game::SpawnLootSpools(int floor)
+{
+    if (floor < 1 || floor > MAX_FLOOR) return;
+    XMFLOAT3 sp = party[active].pos; sp.y = 0;
+    int placedN = 0;
+    for (int k = 0; k < LOOT_N; k++)
+    {
+        if (!LootValid(floor, k) || ((floorGot[floor] >> k) & 1)) continue;
+        bool exists = false;
+        for (auto& ch : chests) if (ch.kind == 2 && ch.loot == k && !ch.opened) exists = true;
+        if (exists) continue;
+        XMFLOAT3 p;
+        if (floor == 12) p = Add(eventPos, F3(std::cos(placedN * 2.1f) * 1.5f, 0, std::sin(placedN * 2.1f) * 1.5f));
+        else if (floor == 1 && placedN == 0) p = Add(sp, F3(RandF(-2, 2), 0, 3.5f));   // 1階は最初の1つをスタート部屋に
+        else
+        {
+            int nr = (int)rooms.size() - 1;                                             // 部屋を順に回して散らばらせる
+            int r = nr > 0 ? 1 + (placedN + floor) % nr : 0;
+            p = RandomFloorPos(rooms[r], 1.6f);
+        }
+        if (Solid(p.x, p.z)) p = Add(sp, F3(RandF(-2, 2), 0, 2.f));
+        chests.push_back({ p, RandF(-PI, PI), false, 0, 2, k });
+        placedN++;
+    }
+}
+
 void Game::EnterDungeon(int floor, uint32_t seed)
 {
     bool fromVillage = scene != SceneId::Dungeon;
     scene = SceneId::Dungeon;
     sceneT = 0;
+    vWalkCam = false;
     if (fromVillage)
     {
         totalDives++;
         crystalsThisRun = 0;
         lantern = 100;
-        for (auto& a : party) { a.hp = a.maxHp; a.st = ASt::Normal; }
+        for (int i = 0; i < 3; i++) { party[i].hp = party[i].maxHp; party[i].st = ASt::Normal; }
+        if (!joined[active]) active = 0;
     }
     floorNo = floor;
+    // 操作キャラの決まった階（3階＝ソラ、7階＝クロベエ、14階＝カイリ）
+    forceChar = RequiredChar(floor);
+    if (forceChar >= 0 && joined[forceChar]) active = forceChar; else forceChar = -1;
     hasKey = false;
-    exitMenu = false;
+    exitMenu = false; menuOpen = false;
     downT = 0;
+    qteOn = false; eventState = 0; eventT = 0; nagiAlpha = 0; rootAnim = 0;
     GenerateFloor(floor, seed);
     deepest = std::max(deepest, floor);
-    std::wstring name = L"根の洞　" + std::to_wstring(floor) + L" / 10";
-    if (floor == 5) name += L"　中間の間";
-    else if (floor >= 6) name += L"　深層";
-    ToastMsg(name, RGBA(1, 0.9f, 0.7f));
-    if (floor == 5) { Say(L"ツムギ", L"糸が…ほどけてる？ 気をつけて、なにか大きいのがいる！"); bossIntroT = 0; }
-    else if (fromVillage && totalDives == 1) Say(L"クロベエ", L"坊、灯（ともしび）が尽きる前に結晶を集めるぞ。鍵持ちの化け物を探せ。");
+    arriveT = 0;                       // 上から降り立つ演出
+    party[active].pos.y = 5.f;
+}
+
+void Game::GoToFloor(int floor)
+{
+    std::wstring block = FloorBlock(floor);
+    if (!block.empty()) { ToastMsg(block, RGBA(1, 0.6f, 0.5f)); return; }
+    std::wstring sub = FloorSubtitle(floor);
+    uint32_t seed = (uint32_t)(GetTickCount() + floor * 101);
+    if (autoshot) seed = 1000 + floor * 37;
+    StartTransition(L"根の洞", sub, [this, floor, seed] { EnterDungeon(floor, seed); });
 }
 
 void Game::LeaveDungeon(bool dead)
 {
-    if (dead)
-    {
-        ToastMsg(L"力尽きた…村へ戻された", RGBA(1, 0.55f, 0.5f));
-        threads = threads / 2;
-    }
-    EnterVillage(true);
+    if (dead) threads = threads / 2;
+    StartTransition(L"ハタオリ村", dead ? L"力尽きて、ツムギの糸に引き戻された…" : L"村へ戻る", [this, dead] {
+        EnterVillage(true);
+        if (dead) ToastMsg(L"力尽きた…村へ戻された", RGBA(1, 0.55f, 0.5f));
+    });
 }
 
 void Game::SpawnFx(int kind, XMFLOAT3 pos, float size, XMFLOAT4 col, float dur)
@@ -350,21 +546,36 @@ void Game::SpawnFx(int kind, XMFLOAT3 pos, float size, XMFLOAT4 col, float dur)
 
 void Game::AddNum(XMFLOAT3 pos, int v, D2D1_COLOR_F c, float size)
 {
+    if (!setDmgNums) return;   // 設定でダメージの数字を消せる
+    AddNum2(pos, v, c, size);
+}
+void Game::AddNum2(XMFLOAT3 pos, int v, D2D1_COLOR_F c, float size)
+{
     nums.push_back({ Add(pos, F3(RandF(-0.3f, 0.3f), 0, RandF(-0.3f, 0.3f))), 0, v, c, size });
 }
 
-void Game::UseItem(int i)
+void Game::UseItem(int i) { UseItemOn(i, party[active]); }
+
+// アイテムを使う（武器画面では、見ているキャラの武器に使える）
+void Game::UseItemOn(int i, Actor& a)
 {
-    if (i < 0 || i > 3 || items[i] <= 0) return;
-    Actor& a = party[active];
+    if (i < 0 || i >= ITEM_N || items[i] <= 0) return;
     switch (i)
     {
     case 0: a.hp = std::min(a.maxHp, a.hp + 40); ToastMsg(L"薬草を使った（HP回復）", RGBA(0.6f, 1, 0.6f)); break;
     case 1: lantern = std::min(100.f, lantern + 50); ToastMsg(L"灯油を注いだ（灯 回復）", RGBA(1, 0.8f, 0.4f)); break;
     case 2:
-        if (a.broken) { ToastMsg(L"壊れた武器は研げない", RGBA(1, 0.5f, 0.45f)); return; }
+        if (a.broken) { ToastMsg(L"壊れた武器は研げない（繕い糸で直そう）", RGBA(1, 0.5f, 0.45f)); return; }
         a.dur = std::min(a.maxDur, a.dur + a.maxDur * 0.3f); ToastMsg(L"研ぎ粉で刃を整えた（耐久回復）"); break;
-    case 3: items[i]--; ToastMsg(L"帰り糸をたぐって村へ戻った"); LeaveDungeon(false); return;
+    case 3: items[i]--; ToastMsg(L"帰り糸をたぐって村へ戻る"); LeaveDungeon(false); return;
+    case 4:
+        // 繕い糸：壊れた最初の武器を元どおりに直す
+        if (!a.broken) { ToastMsg(L"武器は壊れていない（繕い糸は壊れた最初の武器を直す）", RGBA(1, 0.8f, 0.7f)); return; }
+        a.broken = false; a.dur = a.maxDur;
+        SyncWeapon(a);
+        SpawnFx(2, Add(a.pos, F3(0, 1.0f, 0)), 3.f, C4(0.7f, 1.f, 0.8f), 0.6f);
+        ToastMsg(std::wstring(kWeapons[weapons[a.weapon].def].name) + L" を繕い糸で直した！", RGBA(0.6f, 1, 0.75f));
+        break;
     }
     items[i]--;
 }
@@ -375,15 +586,17 @@ void Game::UseItem(int i)
 void Game::WeaponWear(Actor& a, int n)
 {
     if (a.broken) return;
-    a.dur -= (float)n;
-    if (a.dur <= 0)
-    {
-        a.dur = 0;
-        a.broken = true;
-        threads++;
-        ToastMsg(std::wstring(Def(a).weapon) + L"が壊れた！「ほつれ糸」を回収した", RGBA(1, 0.55f, 0.45f));
-        SpawnFx(1, Add(a.pos, F3(0, 1, 0)), 3.f, C4(1, 0.8f, 0.5f), 0.6f);
-    }
+    for (int i = 0; i < n; i++) if (RandF(0, 1) >= a.wearSave) a.dur -= 1.f * (scene == SceneId::Dungeon ? wearMul : 1.f);   // 14階は3倍減る
+    if (a.dur <= 0) BreakWeapon(a);
+}
+
+static int ActorElement(const Game* g, const Actor& a, const std::vector<OwnedWeapon>& ws)
+{
+    if (a.weapon < 0 || a.weapon >= (int)ws.size()) return 0;
+    const OwnedWeapon& w = ws[a.weapon];
+    if (kWeapons[w.def].element) return kWeapons[w.def].element;
+    for (int s = 0; s < 2; s++) if (w.att[s] == AT_FIRE) return 1;
+    return 0;
 }
 
 void Game::ActorAttackHits(Actor& a, float reach, float arcDeg, float dmg, bool heavy, int wear)
@@ -391,7 +604,7 @@ void Game::ActorAttackHits(Actor& a, float reach, float arcDeg, float dmg, bool 
     bool any = false;
     XMFLOAT3 f = Fwd(a.yaw);
     float cosHalf = std::cos(arcDeg * 0.5f * PI / 180.f);
-    float mult = (a.broken ? 0.45f : 1.f) * (1.f + 0.06f * (a.lvl - 1));
+    float mult = AttackMul(a);
     for (auto& e : enemies)
     {
         if (e.st == ESt::Dead) continue;
@@ -400,36 +613,85 @@ void Game::ActorAttackHits(Actor& a, float reach, float arcDeg, float dmg, bool 
         if (d > reach) continue;
         XMFLOAT3 n = NormXZ(to);
         if (DotXZ(n, f) < cosHalf && d > 0.4f) continue;
-        float kb = heavy ? 7.f : 3.5f;
-        if (Def(a).badger && heavy) kb = -6.f;   // ひも通し：刺して引き寄せる
-        HitEnemy(e, std::round(dmg * mult * RandF(0.92f, 1.08f)), a.pos, kb, heavy, &a);
+        HitEnemy(e, std::round(dmg * mult * RandF(0.92f, 1.08f)), a.pos, heavy ? 7.f : 3.5f, heavy, &a);
         any = true;
     }
+    if (!pillars.empty()) DamagePillars(a.pos, a.yaw, reach, arcDeg, std::round(dmg * mult));   // 15階：糸の柱にも当たる
     if (any)
     {
         WeaponWear(a, wear);
         hitstop = std::max(hitstop, heavy ? 0.09f : 0.05f);
-        if (&a == &party[active]) shake = std::max(shake, heavy ? 0.25f : 0.1f);
+        shake = std::max(shake, heavy ? 0.25f : 0.1f);
     }
+}
+
+// 着地点のまわりを巻き込む攻撃（クロベエ）。pull=true で使い手の方へ引き寄せる
+void Game::AreaHit(Actor& a, XMFLOAT3 center, float radius, float dmg, bool pull, int wear)
+{
+    bool any = false;
+    float mult = AttackMul(a);
+    for (auto& e : enemies)
+    {
+        if (e.st == ESt::Dead) continue;
+        if (DistXZ(e.pos, center) > radius + e.radius) continue;
+        XMFLOAT3 from = pull ? Add(e.pos, NormXZ(Sub(e.pos, a.pos))) : center;
+        HitEnemy(e, std::round(dmg * mult * RandF(0.92f, 1.08f)), from, pull ? 5.5f : 4.f, false, &a);
+        any = true;
+    }
+    if (any) { WeaponWear(a, wear); hitstop = std::max(hitstop, 0.05f); shake = std::max(shake, 0.12f); }
 }
 
 void Game::HitEnemy(Enemy& e, float dmg, XMFLOAT3 from, float kb, bool heavy, Actor* by)
 {
     if (e.st == ESt::Dead) return;
+    if (e.t == EType::RootArm && !qteOn)
+    {
+        SpawnFx(0, Add(e.pos, F3(0, 2.f, 0)), 1.5f, C4(0.7f, 0.7f, 0.7f), 0.3f);
+        return;   // 根の主の腕は QTE でしか切れない
+    }
+    bool weak = false;
+    if (by)
+    {
+        int el = ActorElement(this, *by, weapons);
+        if (el && el == kEDefs[(int)e.t].weak) { dmg = std::round(dmg * 1.5f); weak = true; }
+        // 根の鎧武者：正面からの攻撃は半分受け流す（後ろや横から狙う）
+        if (e.t == EType::Knight && e.st != ESt::Attack && DotXZ(Fwd(e.yaw), NormXZ(Sub(by->pos, e.pos))) > 0.4f)
+        {
+            dmg = std::round(dmg * 0.5f);
+            SpawnFx(0, Add(e.pos, Add(Mul(Fwd(e.yaw), 0.7f), F3(0, 1.0f, 0))), 1.6f, C4(0.8f, 0.9f, 1.f), 0.3f);
+        }
+    }
+    if (e.t == EType::Utsuro && floorNo == 15)
+    {
+        // うつろ：4本の糸の柱が1本でも残っている間は、まったく効かない（柱を全部壊すと守りが消える）
+        bool shield = false;
+        for (auto& p : pillars) if (p.alive) shield = true;
+        if (shield)
+        {
+            e.flash = 0.3f;
+            SpawnFx(0, Add(e.pos, F3(RandF(-0.8f, 0.8f), 2.2f, RandF(-0.8f, 0.8f))), 2.6f, C4(0.55f, 0.6f, 1.f), 0.35f);
+            AddNum2(Add(e.pos, F3(0, 3.6f, 0)), 0, RGBA(0.6f, 0.7f, 1.f), 26);
+            if (immuneMsgT <= 0) { ToastMsg(L"糸の柱に守られて効かない！ 4本の柱を先に壊そう", RGBA(0.7f, 0.8f, 1.f)); immuneMsgT = 4.f; }
+            return;
+        }
+        if (e.pattern == 9) dmg = std::round(dmg * 1.6f);   // 気絶中は大きく効く
+    }
     e.hp -= dmg;
     e.flash = 1;
-    float h = e.t == EType::Spider ? 3.2f : 1.3f;
-    AddNum(Add(e.pos, F3(0, h, 0)), (int)dmg, heavy ? RGBA(1, 0.7f, 0.25f) : RGBA(1, 1, 1), heavy ? 36.f : 28.f);
-    SpawnFx(0, Add(e.pos, F3(0, h * 0.6f, 0)), heavy ? 2.8f : 1.9f, C4(1, 0.85f, 0.6f), 0.5f);
+    float h = (e.t == EType::Spider || e.t == EType::Guardian || e.t == EType::Utsuro) ? 3.4f : 1.3f;
+    AddNum(Add(e.pos, F3(0, h, 0)), (int)dmg, weak ? RGBA(1, 0.5f, 0.15f) : heavy ? RGBA(1, 0.7f, 0.25f) : RGBA(1, 1, 1), weak || heavy ? 36.f : 28.f);
+    SpawnFx(0, Add(e.pos, F3(0, h * 0.6f, 0)), heavy ? 2.8f : 1.9f, weak ? C4(1, 0.55f, 0.3f) : C4(1, 0.85f, 0.6f), 0.5f);
     XMFLOAT3 dir = NormXZ(Sub(e.pos, from));
-    if (e.t != EType::Spider)
+    bool big = IsBossType(e.t);
+    if (!big)
     {
         e.kb = Mul(dir, kb);
         if (e.token) { e.token = false; tokens--; }
         e.st = ESt::Hit; e.stT = 0;
     }
-    else if (heavy) e.kb = Mul(dir, kb * 0.25f);
+    else if (heavy && e.t != EType::RootArm) e.kb = Mul(dir, kb * 0.25f);
     if (e.hp <= 0) KillEnemy(e, by);
+    else if (e.st == ESt::Idle) e.st = ESt::Notice;
 }
 
 void Game::KillEnemy(Enemy& e, Actor* by)
@@ -438,25 +700,40 @@ void Game::KillEnemy(Enemy& e, Actor* by)
     e.st = ESt::Dead;
     e.deadT = 0;
     if (e.token) { e.token = false; tokens--; }
-    SpawnFx(1, Add(e.pos, F3(0, 0.8f, 0)), e.t == EType::Spider ? 6.f : 2.6f, C4(0.8f, 0.85f, 1.f), 0.6f);
+    bool big = IsBossType(e.t);
+    SpawnFx(1, Add(e.pos, F3(0, 0.8f, 0)), big ? 7.f : 2.6f, C4(0.8f, 0.85f, 1.f), 0.6f);
     if (e.keyHolder)
         pickups.push_back({ PickKind::Key, Add(e.pos, F3(0, 1.0f, 0)), 0, false, 4.f });
     else if (RandI(0, 3) == 0)
         pickups.push_back({ PickKind::Herb, Add(e.pos, F3(0, 0.8f, 0)), 0, false, 3.f });
+    if (e.t != EType::RootArm)
+        pickups.push_back({ PickKind::Money, Add(e.pos, F3(RandF(-0.4f, 0.4f), 0.8f, RandF(-0.4f, 0.4f))), 0, false, 3.5f, big ? 120 : RandI(3, 8) });
     if (e.t == EType::Spider)
     {
         ToastMsg(L"ほつれ蜘蛛を倒した！", RGBA(1, 0.85f, 0.4f));
-        if (!knot) { knot = true; ToastMsg(L"「結び目」ができた。次からは6階から潜れる", RGBA(0.7f, 0.95f, 1)); }
+        if (!knot) { knot = true; ToastMsg(L"「結び目」ができた。入口で深い階を選べるようになる", RGBA(0.7f, 0.95f, 1)); }
+        if (floorNo == 5)
+        {
+            eventsDone |= EV_BOSS5;
+            SaveGame(false);
+            // 中ボスを倒すと、武器と鍵が入った宝箱が出る
+            Chest ch{ Add(e.pos, F3(0, 0, -1.5f)), PI, false, 0, 1 };
+            ch.key = true;
+            chests.push_back(ch);
+            SpawnFx(2, Add(ch.pos, F3(0, 1.f, 0)), 5.f, C4(1, 0.85f, 0.5f), 0.9f);
+            ToastMsg(L"武器と鍵が入った宝箱が現れた！", RGBA(1, 0.85f, 0.4f));
+        }
     }
-    if (lockIdx >= 0 && &enemies[lockIdx] == &e) lockIdx = -1;
+    if (e.t == EType::Guardian) ToastMsg(L"大樹の番人を鎮めた！", RGBA(1, 0.85f, 0.4f));
+    if (e.t == EType::Utsuro && floorNo == 15) ToastMsg(L"うつろを鎮めた！", RGBA(1, 0.85f, 0.4f));
     if (by)
     {
-        by->exp += e.t == EType::Spider ? 160.f : 24.f;
+        by->exp += big ? 160.f : 24.f;
         while (by->exp >= 100.f * by->lvl)
         {
             by->exp -= 100.f * by->lvl;
             by->lvl++;
-            ToastMsg(std::wstring(Def(*by).weapon) + L" が Lv" + std::to_wstring(by->lvl) + L" に成長した", RGBA(0.7f, 1, 0.7f));
+            ToastMsg(std::wstring(kWeapons[weapons[by->weapon].def].name) + L" が Lv" + std::to_wstring(by->lvl) + L" に成長した", RGBA(0.7f, 1, 0.7f));
         }
     }
 }
@@ -468,21 +745,26 @@ void Game::DamageActor(Actor& a, float dmg, XMFLOAT3 from, float kb)
     bool front = DotXZ(Fwd(a.yaw), Mul(dir, -1)) > 0.3f;
     if (a.st == ASt::Guard && front)
     {
-        dmg *= 0.25f;
-        kb *= 0.35f;
+        // クロベエの旋回防御：正面からの攻撃は完全に防ぐ（耐久−1）
+        dmg = Def(a).badger ? 0.f : dmg * 0.25f;
+        kb *= 0.25f;
         WeaponWear(a, 1);
-        SpawnFx(0, Add(a.pos, Add(Mul(Fwd(a.yaw), 0.5f), F3(0, 1, 0))), 1.4f, C4(0.7f, 0.85f, 1), 0.4f);
+        SpawnFx(0, Add(a.pos, Add(Mul(Fwd(a.yaw), 1.0f), F3(0, 1.05f, 0))), 2.0f, C4(1.f, 0.8f, 0.6f), 0.4f);
+        hitstop = std::max(hitstop, 0.04f);
     }
-    else
+    else if (!(a.st == ASt::Guard && Def(a).badger))
     {
         a.st = ASt::Hit; a.stT = 0;
     }
     a.hp -= dmg;
-    a.flash = 1;
     a.kb = Mul(dir, kb);
     a.invuln = 0.5f;
-    AddNum(Add(a.pos, F3(0, 1.8f, 0)), (int)std::round(dmg), RGBA(1, 0.4f, 0.35f), 26);
-    if (&a == &party[active]) shake = std::max(shake, 0.3f);
+    if (dmg > 0.5f)
+    {
+        a.flash = 1;
+        AddNum(Add(a.pos, F3(0, 1.8f, 0)), (int)std::round(dmg), RGBA(1, 0.4f, 0.35f), 26);
+        shake = std::max(shake, 0.3f);
+    }
     if (a.hp <= 0)
     {
         a.hp = 0;
@@ -492,7 +774,7 @@ void Game::DamageActor(Actor& a, float dmg, XMFLOAT3 from, float kb)
 }
 
 // ------------------------------------------------------------------
-// プレイヤー／相棒
+// 操作キャラ
 // ------------------------------------------------------------------
 void Game::UpdateActor(Actor& a, const Controls* c, float dt, bool controlled)
 {
@@ -506,65 +788,95 @@ void Game::UpdateActor(Actor& a, const Controls* c, float dt, bool controlled)
         a.kb = Mul(a.kb, std::max(0.f, 1 - dt * 8));
     }
     if (a.st == ASt::Down) return;
-    if (!controlled) { UpdateFollower(a, dt); return; }
+    if (!controlled) return;
 
     XMFLOAT3 right{ std::cos(camYaw), 0, -std::sin(camYaw) }, fwd = Fwd(camYaw);
     XMFLOAT3 mv = Add(Mul(right, c->mx), Mul(fwd, c->mz));
     float ml = LenXZ(mv);
     if (ml > 1) { mv = Mul(mv, 1 / ml); ml = 1; }
-    Enemy* lock = lockIdx >= 0 ? &enemies[lockIdx] : nullptr;
+    Enemy* lock = lockIdx >= 0 && lockIdx < (int)enemies.size() ? &enemies[lockIdx] : nullptr;
     if (c->atkDown) a.holdT += dt; else a.holdT = 0;
+    bool inTown = scene != SceneId::Dungeon;
 
     auto faceTarget = [&]() {
-        if (lock) a.yaw = YawOf(Sub(lock->pos, a.pos));
-        else if (ml > 0.05f) a.yaw = YawOf(mv);
-        else
+        if (lock) { a.yaw = YawOf(Sub(lock->pos, a.pos)); return; }
+        if (ml > 0.05f && !d.ranged) { a.yaw = YawOf(mv); return; }
+        // 近くの敵へ自動で向く（遠距離のカイリは遠くまで狙う）
+        float bd = d.ranged ? 12.f : (d.badger ? 6.f : 3.2f); Enemy* best = nullptr;
+        XMFLOAT3 look = ml > 0.05f ? NormXZ(mv) : Fwd(a.yaw);
+        for (auto& e : enemies)
         {
-            // 近くの敵へ自動で向く（手触り重視）
-            float bd = 3.2f; Enemy* best = nullptr;
-            for (auto& e : enemies)
-            {
-                if (e.st == ESt::Dead) continue;
-                float dd = DistXZ(e.pos, a.pos) - e.radius;
-                if (dd < bd && DotXZ(NormXZ(Sub(e.pos, a.pos)), Fwd(a.yaw)) > -0.2f) { bd = dd; best = &e; }
-            }
-            if (best) a.yaw = YawOf(Sub(best->pos, a.pos));
+            if (e.st == ESt::Dead) continue;
+            float dd = DistXZ(e.pos, a.pos) - e.radius;
+            if (dd < bd && DotXZ(NormXZ(Sub(e.pos, a.pos)), look) > (d.ranged ? 0.4f : -0.2f)) { bd = dd; best = &e; }
         }
+        if (best) a.yaw = YawOf(Sub(best->pos, a.pos));
+        else if (ml > 0.05f) a.yaw = YawOf(mv);
     };
     auto startAttack = [&](int k) {
         a.st = ASt::Attack; a.combo = k; a.stT = 0; a.hitDone = false; a.queued = false;
         faceTarget();
     };
     auto move = [&](float speedMul) {
+        a.dashing = false;
         if (ml > 0.05f)
         {
-            float sp = d.speed * speedMul;
+            bool dash = c->dash && a.st == ASt::Normal;
+            float sp = d.speed * speedMul * a.spdMul * (dash ? 1.65f : 1.f);
             MoveCircle(a.pos, 0.4f, mv.x * sp * dt, mv.z * sp * dt);
             if (!lock || a.st == ASt::Normal) a.yaw = ApproachAngle(a.yaw, lock && a.st != ASt::Normal ? YawOf(Sub(lock->pos, a.pos)) : YawOf(mv), dt * 14);
-            a.walkT += dt * ml * speedMul;
+            a.walkT += dt * ml * speedMul * (dash ? 1.35f : 1.f);
             a.speedNow = sp * ml;
+            a.dashing = dash;
+            if (dash)
+            {
+                a.dustT -= dt;
+                if (a.dustT <= 0) { a.dustT = 0.12f; SpawnFx(3, Add(a.pos, F3(0, 0.15f, 0)), 0.9f, scene == SceneId::Dungeon ? C4(0.6f, 0.65f, 0.75f, 0.6f) : C4(0.75f, 0.68f, 0.55f, 0.6f), 0.45f); }
+            }
         }
         else a.speedNow = 0;
     };
+    auto startDodge = [&]() {
+        a.st = ASt::Dodge; a.stT = 0;
+        a.dodgeDir = ml > 0.05f ? NormXZ(mv) : Mul(Fwd(a.yaw), -1);
+        float dur = DodgeDur(a.def);
+        a.invuln = DodgeInvuln(a.def);         // 無敵はもとより1秒長く続く（動きと硬直はもとのまま）
+        if (a.def == 1) SpawnFx(3, Add(a.pos, F3(0, 0.2f, 0)), 2.0f, C4(0.45f, 0.33f, 0.22f, 0.85f), 0.5f);     // 掘り始めの土煙
+        if (a.def == 2) SpawnFx(3, Add(a.pos, F3(0, 0.2f, 0)), 1.6f, C4(0.6f, 0.85f, 1.f, 0.7f), 0.4f);         // 水しぶき
+        a.glideT = 0;
+    };
+    // 回避のあとの1秒：無敵のあいだ、回避の向きへすべり続ける（硬直はないので、そのまま動ける）
+    if (a.glideT > 0)
+    {
+        if (a.st == ASt::Hit || a.st == ASt::Down || a.st == ASt::Dodge) a.glideT = 0;
+        else
+        {
+            a.glideT = std::max(0.f, a.glideT - dt);
+            float sp = DodgeGlideV(a.def) * a.glideT;    // 1秒で0まで落ちる
+            MoveCircle(a.pos, 0.4f, a.dodgeDir.x * sp * dt, a.dodgeDir.z * sp * dt);
+            glideDist += sp * dt;
+        }
+    }
 
     switch (a.st)
     {
     case ASt::Normal:
         move(1.f);
-        if (c->dodge)
+        if (inTown) break;                 // 町では武器をしまっている
+        if (c->dodge) startDodge();
+        else if (c->guard)
         {
-            a.st = ASt::Dodge; a.stT = 0;
-            a.dodgeDir = ml > 0.05f ? NormXZ(mv) : Mul(Fwd(a.yaw), -1);
-            a.invuln = 0.35f;
+            // 右クリック：ソラ＝溜め→回転攻撃／クロベエ＝旋回防御／カイリ＝溜め→貫く針
+            a.st = d.badger ? ASt::Guard : ASt::Charging;
+            a.stT = 0;
         }
-        else if (c->guard) { a.st = ASt::Guard; a.stT = 0; }
         else if (c->atkPressed) startAttack(0);
         break;
     case ASt::Attack:
     {
         float dur = d.dur[a.combo];
-        float act = dur * 0.35f;
-        if (a.stT < act)
+        float act = dur * d.hitFrac;
+        if (a.def == 0 && a.stT < act)
         {
             XMFLOAT3 f = Fwd(a.yaw);
             MoveCircle(a.pos, 0.4f, f.x * 2.4f * dt, f.z * 2.4f * dt);
@@ -572,11 +884,42 @@ void Game::UpdateActor(Actor& a, const Controls* c, float dt, bool controlled)
         if (!a.hitDone && a.stT >= act)
         {
             a.hitDone = true;
-            ActorAttackHits(a, d.reach, d.arcDeg, d.dmg[a.combo], false, 1);
+            if (a.def == 0)
+            {
+                ActorAttackHits(a, d.reach, d.arc[a.combo], d.dmg[a.combo], a.combo == 2, a.combo == 2 ? 2 : 1);
+                WeaponPose wp; XMMATRIX W = SoraWeaponWorld(a, &wp);
+                XMFLOAT3 mid; XMStoreFloat3(&mid, XMVector3Transform(XMVectorSet(0, 0, 1.4f, 1), W));
+                SpawnFx(2, mid, 2.2f, C4(1, 0.95f, 0.8f), 0.3f);
+            }
+            else if (a.def == 1)
+            {
+                // ひも通しを紐ごと扇形に薙ぎ払う：扇の中の敵すべてに当たる
+                ActorAttackHits(a, kFanReach[a.combo], kFanArc[a.combo], d.dmg[a.combo], a.combo == 2, 1);
+                float half = kFanArc[a.combo] * 0.5f * PI / 180.f;
+                for (int k = 0; k <= 4; k++)
+                {
+                    float ang = a.yaw + (k / 4.f * 2.f - 1.f) * half;
+                    XMFLOAT3 q = Add(a.pos, Mul(Fwd(ang), kFanReach[a.combo] * 0.85f));
+                    SpawnFx(3, Add(q, F3(0, 0.2f, 0)), 1.8f, C4(0.5f, 0.45f, 0.4f, 0.75f), 0.45f);
+                }
+                SpawnFx(1, Add(a.pos, Add(Mul(Fwd(a.yaw), kFanReach[a.combo] * 0.6f), F3(0, 0.4f, 0))), a.combo == 2 ? 4.6f : 3.8f, C4(1.f, 0.55f, 0.45f), 0.35f);
+            }
+            else
+            {
+                // ミシン針を投げる（3段目は3本）
+                XMFLOAT3 hand = Add(a.pos, Add(Mul(Fwd(a.yaw), 0.4f), F3(0, 1.05f, 0)));
+                int n = a.combo == 2 ? 3 : 1;
+                for (int i = 0; i < n; i++)
+                {
+                    float yy = a.yaw + (n == 3 ? (i - 1) * 0.2f : 0.f);
+                    Projectile p{ hand, Mul(Fwd(yy), 19.f), 0.7f, d.dmg[a.combo] * AttackMul(a), 0.35f, 2 };
+                    p.friendly = true; p.owner = active;
+                    projs.push_back(p);
+                }
+            }
         }
         if (c->atkPressed && a.stT > dur * 0.2f) a.queued = true;
-        if (a.combo == 0 && c->atkDown && a.holdT > 0.38f) { a.st = ASt::Charging; a.stT = 0; break; }
-        if (c->dodge && a.stT > act) { a.st = ASt::Dodge; a.stT = 0; a.dodgeDir = ml > 0.05f ? NormXZ(mv) : Mul(Fwd(a.yaw), -1); a.invuln = 0.35f; break; }
+        if (c->dodge && a.stT > act) { startDodge(); break; }
         if (a.stT >= dur)
         {
             if (a.queued && a.combo < 2) startAttack(a.combo + 1);
@@ -585,25 +928,79 @@ void Game::UpdateActor(Actor& a, const Controls* c, float dt, bool controlled)
         break;
     }
     case ASt::Charging:
-        move(0.3f);
+        move(0.35f);
         if (lock) a.yaw = YawOf(Sub(lock->pos, a.pos));
-        if (!c->atkDown) { a.st = ASt::ChargeAtk; a.stT = 0; a.hitDone = false; a.holdT = 0; }
+        if (a.stT >= 0.8f && a.stT - dt < 0.8f)
+            SpawnFx(2, Add(a.pos, F3(0, 1.0f, 0)), 3.f, C4(1, 0.75f, 0.35f), 0.4f);
+        if (!c->guard)
+        {
+            a.chargeLv = Saturate(a.stT / 0.8f);
+            a.st = ASt::ChargeAtk; a.stT = 0; a.hitDone = false; a.combo = 0;
+            if (a.def == 2) faceTarget();
+        }
         break;
     case ASt::ChargeAtk:
-        if (!a.hitDone && a.stT >= 0.18f)
+    {
+        float mul = 0.6f + 0.4f * a.chargeLv;
+        if (a.def == 2)
+        {
+            // カイリ：溜めた大きな針で敵を貫く
+            if (!a.hitDone && a.stT >= 0.12f)
+            {
+                a.hitDone = true;
+                XMFLOAT3 hand = Add(a.pos, Add(Mul(Fwd(a.yaw), 0.4f), F3(0, 1.1f, 0)));
+                Projectile p{ hand, Mul(Fwd(a.yaw), 24.f), 0.75f, d.chargeDmg * mul * AttackMul(a), 0.55f, 3 };
+                p.friendly = true; p.pierce = true; p.owner = active;
+                projs.push_back(p);
+                SpawnFx(1, hand, 2.5f, C4(0.6f, 0.9f, 1.f), 0.35f);
+                shake = std::max(shake, 0.15f);
+            }
+            if (a.stT >= 0.45f) a.st = ASt::Normal;
+            break;
+        }
+        // ソラ：刃を開いたまま2回転して周囲を斬り、最後に正面で挟む
+        if (ml > 0.05f && a.stT < 0.8f)
+            MoveCircle(a.pos, 0.4f, mv.x * d.speed * 0.45f * dt, mv.z * d.speed * 0.45f * dt);
+        const float ticks[2] = { 0.3f, 0.55f };
+        if (a.combo < 2 && a.stT >= ticks[a.combo])
+        {
+            ActorAttackHits(a, d.chargeReach, 360.f, d.chargeDmg * 0.45f * mul, false, 1);
+            a.combo++;
+        }
+        if (!a.hitDone && a.stT >= 0.8f)
         {
             a.hitDone = true;
-            ActorAttackHits(a, d.chargeReach, d.chargeArc, d.chargeDmg, true, 3);
-            SpawnFx(1, Add(a.pos, Add(Mul(Fwd(a.yaw), 1.2f), F3(0, 0.9f, 0))), 4.f, C4(1, 0.85f, 0.5f), 0.45f);
+            ActorAttackHits(a, d.chargeReach, d.chargeArc, d.chargeDmg * mul, true, 1);
+            SpawnFx(1, Add(a.pos, Add(Mul(Fwd(a.yaw), 1.5f), F3(0, 0.9f, 0))), 4.5f, C4(1, 0.85f, 0.5f), 0.45f);
         }
-        if (a.stT >= 0.58f) a.st = ASt::Normal;
+        if (a.stT >= 1.05f) a.st = ASt::Normal;
         break;
+    }
     case ASt::Dodge:
     {
-        float k = 1 - a.stT / 0.4f;
-        float sp = 12.f * std::max(0.f, k);
+        // 回避：動きと硬直はもとのまま。無敵の持続時間だけ1秒長い（startDodge で設定）
+        float dur = DodgeDur(a.def), base = DodgeBase(a.def);
+        float bt = a.stT / dur * base;            // もとの動きでの経過時間
+        float slow = 1.f;                          // 動く速さ・距離はもとのまま
+        float sp;
+        if (a.def == 1)
+        {
+            // クロベエ：地面に潜って進み、飛び出す
+            sp = (bt > 0.15f && bt < 0.45f) ? 11.f * slow : bt >= 0.45f ? DodgeGlideV(1) : 0.f;   // 飛び出したあとも、すべりへつなぐ
+            float btPrev = (a.stT - dt) / dur * base;
+            if (bt >= 0.45f && btPrev < 0.45f)
+                SpawnFx(3, Add(a.pos, F3(0, 0.3f, 0)), 2.4f, C4(0.45f, 0.33f, 0.22f, 0.9f), 0.55f);
+            if (sp > 0) { a.dustT -= dt; if (a.dustT <= 0) { a.dustT = 0.08f; SpawnFx(3, Add(a.pos, F3(RandF(-0.3f, 0.3f), 0.1f, RandF(-0.3f, 0.3f))), 1.0f, C4(0.42f, 0.32f, 0.22f, 0.7f), 0.4f); } }
+        }
+        else
+        {
+            // ソラ：前転／カイリ：腹ばいで滑る。終わりの速さを、あとのすべりの速さにつなぐ
+            float peak = a.def == 2 ? 13.f : 12.f, v0 = DodgeGlideV(a.def);
+            sp = (peak - (peak - v0) * std::min(1.f, a.stT / dur)) * slow;
+        }
         MoveCircle(a.pos, 0.4f, a.dodgeDir.x * sp * dt, a.dodgeDir.z * sp * dt);
-        if (a.stT >= 0.4f) a.st = ASt::Normal;
+        dodgeDist += sp * dt;
+        if (a.stT >= dur) { a.st = ASt::Normal; a.glideT = 1.0f; }   // 回避の距離を1秒ぶんのばす（無敵の1秒のあいだすべる）
         break;
     }
     case ASt::Guard:
@@ -618,54 +1015,24 @@ void Game::UpdateActor(Actor& a, const Controls* c, float dt, bool controlled)
     }
 }
 
-void Game::UpdateFollower(Actor& a, float dt)
+// 町での仲間（主人公の横をついて歩く）
+void Game::UpdateFollower(Actor& a, float dt, int slot)
 {
     const CharDef& d = Def(a);
     Actor& L = party[active];
-    a.aiCd -= dt;
-    a.hp = std::min(a.maxHp, a.hp + 0.8f * dt);   // 控えは少しずつ回復
-    if (a.st == ASt::Attack)
-    {
-        float dur = d.dur[a.combo], act = dur * 0.4f;
-        if (!a.hitDone && a.stT >= act) { a.hitDone = true; ActorAttackHits(a, d.reach, d.arcDeg, d.dmg[a.combo], false, 1); }
-        if (a.stT >= dur) a.st = ASt::Normal;
-        return;
-    }
-    if (a.st == ASt::Hit) { if (a.stT > 0.32f) a.st = ASt::Normal; return; }
+    a.stT += dt;
     a.st = ASt::Normal;
-
-    Enemy* tgt = nullptr; float bd = 9.f;
-    for (auto& e : enemies)
-    {
-        if (e.st == ESt::Dead || e.st == ESt::Idle) continue;
-        float dd = DistXZ(e.pos, L.pos);
-        if (dd < bd) { bd = dd; tgt = &e; }
-    }
-    XMFLOAT3 goal; float stop;
-    // カメラと主人公の間に入らないよう、画面の右側に立つ
     XMFLOAT3 camR{ std::cos(camYaw), 0, -std::sin(camYaw) };
-    if (tgt)
-    {
-        XMFLOAT3 side = NormXZ(Sub(Add(L.pos, Mul(camR, 2.5f)), tgt->pos));
-        goal = Add(tgt->pos, Mul(side, d.reach * 0.8f + tgt->radius));
-        if (Solid(goal.x, goal.z)) goal = tgt->pos;
-        stop = Solid(goal.x, goal.z) ? d.reach * 0.8f : 0.5f;
-        if (DistXZ(a.pos, tgt->pos) < d.reach * 0.85f + tgt->radius && DistXZ(a.pos, goal) < 1.5f) stop = 2.f;
-    }
-    else
-    {
-        goal = Add(L.pos, Add(Mul(camR, 1.8f), Mul(Fwd(camYaw), 0.2f)));
-        if (Solid(goal.x, goal.z)) goal = Add(L.pos, Mul(camR, -1.8f));
-        if (Solid(goal.x, goal.z)) goal = L.pos;
-        stop = 0.7f;
-    }
+    float side = slot == 0 ? 1.7f : -1.7f;
+    XMFLOAT3 goal = Add(L.pos, Add(Mul(camR, side), Mul(Fwd(camYaw), -0.6f - slot * 0.4f)));
+    if (Solid(goal.x, goal.z)) goal = Add(L.pos, Mul(Fwd(camYaw), -1.4f - slot));
+    if (Solid(goal.x, goal.z)) goal = L.pos;
     float dist = DistXZ(a.pos, goal);
-    if (DistXZ(a.pos, L.pos) > 16.f) { a.pos = Add(L.pos, Mul(Fwd(L.yaw), -1.f)); if (Solid(a.pos.x, a.pos.z)) a.pos = L.pos; }
-    if (dist > stop)
+    if (DistXZ(a.pos, L.pos) > 14.f) { a.pos = goal; return; }
+    if (dist > 0.6f)
     {
-        XMFLOAT3 wp = dist > 4.f ? PathNext(a.pos, goal) : goal;
-        XMFLOAT3 dir = NormXZ(Sub(wp, a.pos));
-        float sp = d.speed * (dist > 6 ? 1.2f : (tgt ? 1.f : std::min(1.f, dist / 2.f + 0.3f)));
+        XMFLOAT3 dir = NormXZ(Sub(goal, a.pos));
+        float sp = d.speed * std::min(1.7f, dist / 1.5f + 0.4f);
         MoveCircle(a.pos, 0.4f, dir.x * sp * dt, dir.z * sp * dt);
         a.yaw = ApproachAngle(a.yaw, YawOf(dir), dt * 10);
         a.walkT += dt * sp / d.speed;
@@ -674,15 +1041,7 @@ void Game::UpdateFollower(Actor& a, float dt)
     else
     {
         a.speedNow = 0;
-        if (tgt)
-        {
-            a.yaw = ApproachAngle(a.yaw, YawOf(Sub(tgt->pos, a.pos)), dt * 10);
-            if (a.aiCd <= 0)
-            {
-                a.st = ASt::Attack; a.combo = RandI(0, 2); a.stT = 0; a.hitDone = false;
-                a.aiCd = 1.15f;
-            }
-        }
+        a.yaw = ApproachAngle(a.yaw, L.yaw, dt * 4);
     }
 }
 
@@ -692,12 +1051,15 @@ void Game::UpdateFollower(Actor& a, float dt)
 void Game::UpdateEnemies(float dt)
 {
     auto release = [&](Enemy& e) { if (e.token) { e.token = false; tokens--; } };
+    Actor& tgtA = party[active];
     for (auto& e : enemies)
     {
         const EDef& ed = kEDefs[(int)e.t];
         e.flash = std::max(0.f, e.flash - dt * 5);
         e.bob += dt;
         if (e.st == ESt::Dead) { e.deadT += dt; continue; }
+        if (e.t == EType::RootArm) continue;    // 根の主の腕はイベントで動く
+        if (e.t == EType::Utsuro) { if (floorNo == 15) UpdateUtsuro(e, dt); continue; }   // 12階ではイベントだけ
         if (LenXZ(e.kb) > 0.02f)
         {
             MoveCircle(e.pos, e.radius, e.kb.x * dt, e.kb.z * dt);
@@ -706,14 +1068,12 @@ void Game::UpdateEnemies(float dt)
         e.stT += dt;
         e.atkCd -= dt;
 
-        Actor* tgt = &party[active];
-        Actor& other = party[1 - active];
-        if (tgt->st == ASt::Down || (other.st != ASt::Down && DistXZ(other.pos, e.pos) + 2.f < DistXZ(tgt->pos, e.pos))) tgt = &other;
-        if (tgt->st == ASt::Down) { e.st = ESt::Idle; continue; }
+        Actor* tgt = &tgtA;
+        if (tgt->st == ASt::Down || arriveT < 0.8f) { if (e.st != ESt::Idle) e.st = ESt::Chase; if (tgt->st == ASt::Down) { e.st = ESt::Idle; continue; } }
         XMFLOAT3 to = Sub(tgt->pos, e.pos);
         float d = LenXZ(to);
         XMFLOAT3 dir = NormXZ(to);
-        bool boss = e.t == EType::Spider;
+        bool boss = IsBossType(e.t);
         auto moveDir = [&](XMFLOAT3 mdir, float sp) {
             MoveCircle(e.pos, e.radius, mdir.x * sp * dt, mdir.z * sp * dt);
             if (LenXZ(mdir) > 0.01f) e.yaw = ApproachAngle(e.yaw, YawOf(mdir), dt * 8);
@@ -723,19 +1083,28 @@ void Game::UpdateEnemies(float dt)
             if (!boss) { e.token = true; tokens++; }
         };
         bool canTake = boss || tokens < 2;
+        // ほつれ蜘蛛：ときどき子分（霧ネズミ）を呼び出す。ボスの階の敵はボスが呼んだものだけ
+        if (e.t == EType::Spider && e.st != ESt::Idle && e.st != ESt::Notice)
+        {
+            summonT += dt;
+            int alive = 0;
+            for (auto& o : enemies) if (o.st != ESt::Dead && !IsBossType(o.t)) alive++;
+            if (summonT > 9.f && alive < 3)
+            {
+                summonT = 0;
+                for (int k = -1; k <= 1; k += 2) pendingSpawns.push_back({ EType::Rat, Add(e.pos, Mul(Fwd(e.yaw + k * 1.2f), 3.f)) });
+                ToastMsg(L"ほつれ蜘蛛が子分を呼んだ！", RGBA(1, 0.7f, 0.6f));
+            }
+        }
 
         switch (e.st)
         {
         case ESt::Idle:
         {
             e.wanderT -= dt;
-            if (e.wanderT <= 0)
-            {
-                e.wander = Add(e.pos, F3(RandF(-3, 3), 0, RandF(-3, 3)));
-                e.wanderT = RandF(2, 4);
-            }
+            if (e.wanderT <= 0) { e.wander = Add(e.pos, F3(RandF(-3, 3), 0, RandF(-3, 3))); e.wanderT = RandF(2, 4); }
             XMFLOAT3 wd = Sub(e.wander, e.pos);
-            if (LenXZ(wd) > 0.3f) moveDir(NormXZ(wd), ed.speed * 0.3f);
+            if (LenXZ(wd) > 0.3f && !boss) moveDir(NormXZ(wd), ed.speed * 0.3f);
             int rr = RoomAt(e.pos);
             if (d < ed.notice && ((rr >= 0 && rr == RoomAt(tgt->pos)) || d < 6.f)) { e.st = ESt::Notice; e.stT = 0; }
             break;
@@ -745,17 +1114,23 @@ void Game::UpdateEnemies(float dt)
             if (e.stT > 0.55f) e.st = ESt::Chase;
             break;
         case ESt::Chase:
-            if (e.t == EType::Spore)
+            if (e.t == EType::Spore || e.t == EType::Moth)
             {
                 if (d < 4.f) moveDir(Mul(dir, -1), ed.speed);
                 else if (d > 7.5f) moveDir(dir, ed.speed);
                 else
                 {
-                    XMFLOAT3 tan{ -dir.z, 0, dir.x };
-                    moveDir(tan, ed.speed * 0.4f);
+                    // 蛾はジグザグに飛び回る
+                    float zig = e.t == EType::Moth ? std::sin(e.bob * 2.3f) * 1.4f : 0.4f;
+                    moveDir(F3(-dir.z * zig, 0, dir.x * zig), ed.speed * (e.t == EType::Moth ? 0.35f : 0.25f));   // 回りこみはゆっくり
                     e.yaw = ApproachAngle(e.yaw, YawOf(dir), dt * 8);
                 }
                 if (d < ed.atkRange && e.atkCd <= 0 && canTake) startWindup();
+            }
+            else if (e.t == EType::Guardian)
+            {
+                if (d > 4.5f) moveDir(dir, ed.speed); else e.yaw = ApproachAngle(e.yaw, YawOf(dir), dt * 3);
+                if (e.atkCd <= 0) startWindup();
             }
             else
             {
@@ -765,16 +1140,22 @@ void Game::UpdateEnemies(float dt)
                     moveDir(NormXZ(Sub(wp, e.pos)), ed.speed);
                 }
                 else if (e.atkCd <= 0 && canTake) startWindup();
-                else
-                {
-                    XMFLOAT3 tan{ -dir.z, 0, dir.x };
-                    moveDir(tan, ed.speed * 0.3f);
-                    e.yaw = ApproachAngle(e.yaw, YawOf(dir), dt * 8);
-                }
+                else { moveDir(F3(-dir.z, 0, dir.x), ed.speed * 0.1f); e.yaw = ApproachAngle(e.yaw, YawOf(dir), dt * 4); }   // 回りこみはゆっくり
             }
             break;
         case ESt::Windup:
             if (e.stT < ed.windup * 0.75f) e.yaw = ApproachAngle(e.yaw, YawOf(dir), dt * 10);
+            if (e.t == EType::Guardian && e.stT < dt * 1.5f)
+            {
+                e.pattern = d < 6.f ? 0 : 1;
+                if (e.pattern == 1)
+                {
+                    // 根の突き上げ：足元に予告円を出す
+                    markers.push_back({ tgt->pos, 0, 0.95f, 1.7f, 16 });
+                    for (int k = 0; k < 2; k++)
+                        markers.push_back({ Add(tgt->pos, F3(RandF(-3, 3), 0, RandF(-3, 3))), 0, 1.1f + k * 0.2f, 1.6f, 14 });
+                }
+            }
             if (e.stT >= ed.windup)
             {
                 e.st = ESt::Attack; e.stT = 0; e.hitDone = false;
@@ -782,12 +1163,21 @@ void Game::UpdateEnemies(float dt)
                 if (e.t == EType::Spore)
                 {
                     XMFLOAT3 o = Add(e.pos, F3(0, 1.0f, 0));
-                    XMFLOAT3 tp = Add(tgt->pos, F3(0, 0.9f, 0));
-                    XMFLOAT3 v = Sub(tp, o);
-                    float l = Len(v);
-                    projs.push_back({ o, Mul(v, 7.5f / l), 3.f, ed.dmg, 0.35f, 0 });
+                    XMFLOAT3 v = Sub(Add(tgt->pos, F3(0, 0.9f, 0)), o);
+                    projs.push_back({ o, Mul(v, 7.5f / Len(v)), 3.f, ed.dmg, 0.35f, 0 });
                 }
-                if (boss)
+                if (e.t == EType::Moth)
+                {
+                    // 糸玉を左右に2発
+                    XMFLOAT3 o = Add(e.pos, F3(0, 1.4f, 0));
+                    for (int k = -1; k <= 1; k += 2)
+                    {
+                        float yy = YawOf(dir) + k * 0.22f;
+                        projs.push_back({ o, Mul(Fwd(yy), 8.5f), 2.5f, ed.dmg, 0.32f, 0 });
+                    }
+                }
+                if (e.t == EType::Shade) e.pattern = 0;   // 1回目の突進
+                if (e.t == EType::Spider)
                 {
                     e.pattern = d < 5.f ? 0 : 1;
                     if (e.pattern == 1)
@@ -802,41 +1192,45 @@ void Game::UpdateEnemies(float dt)
             break;
         case ESt::Attack:
         {
-            auto hitParty = [&](float range, float minDot, float dmg, float kb, XMFLOAT3 center) {
-                for (auto& a : party)
-                {
-                    if (a.st == ASt::Down) continue;
-                    XMFLOAT3 t2 = Sub(a.pos, center);
-                    if (LenXZ(t2) > range) continue;
-                    if (minDot > -1 && DotXZ(NormXZ(Sub(a.pos, e.pos)), Fwd(e.yaw)) < minDot) continue;
-                    DamageActor(a, dmg, e.pos, kb);
-                }
+            auto hitTgt = [&](float range, float minDot, float dmg, float kb, XMFLOAT3 center) {
+                if (tgt->st == ASt::Down) return;
+                if (LenXZ(Sub(tgt->pos, center)) > range) return;
+                if (minDot > -1 && DotXZ(NormXZ(Sub(tgt->pos, e.pos)), Fwd(e.yaw)) < minDot) return;
+                DamageActor(*tgt, dmg, e.pos, kb);
             };
-            if (e.t == EType::Rat)
+            if (e.t == EType::Rat || e.t == EType::Shade)
             {
-                moveDir(e.dashDir, 11.f);
-                if (!e.hitDone)
-                    for (auto& a : party)
-                        if (a.st != ASt::Down && DistXZ(a.pos, e.pos) < e.radius + 0.55f) { DamageActor(a, ed.dmg, e.pos, 7); e.hitDone = true; }
+                moveDir(e.dashDir, e.t == EType::Shade ? 13.f : 11.f);
+                if (!e.hitDone && DistXZ(tgt->pos, e.pos) < e.radius + 0.55f) { DamageActor(*tgt, ed.dmg, e.pos, 7); e.hitDone = true; }
+                // 影法師：1回目の突進のあと、向き直ってもう一度突進する
+                if (e.t == EType::Shade && e.pattern == 0 && e.stT >= ed.atkDur)
+                {
+                    e.pattern = 1; e.stT = 0; e.hitDone = false;
+                    e.dashDir = dir; e.yaw = YawOf(dir);
+                    SpawnFx(3, Add(e.pos, F3(0, 0.8f, 0)), 1.6f, C4(0.2f, 0.15f, 0.3f, 0.8f), 0.4f);
+                }
             }
-            else if (e.t == EType::Doll && !e.hitDone && e.stT > 0.1f)
+            else if (e.t == EType::Doll && !e.hitDone && e.stT > 0.1f) { e.hitDone = true; hitTgt(ed.atkRange + 0.5f, 0.2f, ed.dmg, 6, e.pos); }
+            else if (e.t == EType::Knight && !e.hitDone && e.stT > 0.15f)
             {
-                e.hitDone = true;
-                hitParty(ed.atkRange + 0.5f, 0.2f, ed.dmg, 6, e.pos);
+                // 根の鎧武者：大きく横に薙ぐ
+                e.hitDone = true; hitTgt(ed.atkRange + 0.8f, -0.3f, ed.dmg, 8, e.pos);
+                SpawnFx(1, Add(e.pos, Add(Mul(Fwd(e.yaw), 1.4f), F3(0, 0.8f, 0))), 3.f, C4(0.9f, 0.85f, 0.7f), 0.3f);
             }
             else if (boss && e.pattern == 0 && !e.hitDone && e.stT > 0.15f)
             {
                 e.hitDone = true;
-                XMFLOAT3 c = Add(e.pos, Mul(Fwd(e.yaw), 2.2f));
-                hitParty(3.4f, -2, ed.dmg, 9, c);
+                XMFLOAT3 c = Add(e.pos, Mul(Fwd(e.yaw), e.t == EType::Guardian ? 3.0f : 2.2f));
+                hitTgt(e.t == EType::Guardian ? 4.2f : 3.4f, -2, ed.dmg, 9, c);
                 SpawnFx(1, Add(c, F3(0, 0.3f, 0)), 7.f, C4(0.9f, 0.9f, 1.f), 0.5f);
+                SpawnFx(3, Add(c, F3(0, 0.3f, 0)), 5.f, C4(0.5f, 0.45f, 0.4f, 0.8f), 0.6f);
                 shake = std::max(shake, 0.35f);
             }
             if (e.stT >= ed.atkDur) { e.st = ESt::Recover; e.stT = 0; }
             break;
         }
         case ESt::Recover:
-            if (e.t != EType::Spore && !boss) moveDir(Mul(dir, -1), 1.2f), e.yaw = ApproachAngle(e.yaw, YawOf(dir), dt * 6);
+            if (e.t != EType::Spore && e.t != EType::Moth && !boss) { moveDir(Mul(dir, -1), 1.2f); e.yaw = ApproachAngle(e.yaw, YawOf(dir), dt * 6); }
             if (e.stT >= ed.recover) { release(e); e.atkCd = ed.cd; e.st = ESt::Chase; }
             break;
         case ESt::Hit:
@@ -844,19 +1238,42 @@ void Game::UpdateEnemies(float dt)
             break;
         default: break;
         }
-        if (e.t == EType::Spore) e.pos.y = 0;
+        e.pos.y = 0;
     }
+    // ボスが呼び出した敵を出す
+    for (auto& ps : pendingSpawns)
+    {
+        XMFLOAT3 p = ps.second;
+        if (Solid(p.x, p.z)) p = tgtA.pos;
+        SpawnEnemy(ps.first, p, floorNo >= 9);
+        enemies.back().st = ESt::Chase;
+        SpawnFx(3, Add(p, F3(0, 0.6f, 0)), 2.6f, C4(0.5f, 0.45f, 0.6f, 0.85f), 0.6f);
+    }
+    pendingSpawns.clear();
+    // 予告円（根の突き上げ）
+    for (auto& m : markers)
+    {
+        float before = m.t;
+        m.t += dt;
+        if (before < m.delay && m.t >= m.delay)
+        {
+            if (DistXZ(tgtA.pos, m.pos) < m.radius) DamageActor(tgtA, m.dmg, Sub(m.pos, F3(0, 0, 0.01f)), 8);
+            SpawnFx(3, Add(m.pos, F3(0, 0.3f, 0)), 3.f, C4(0.45f, 0.35f, 0.25f, 0.85f), 0.6f);
+            shake = std::max(shake, 0.2f);
+        }
+    }
+    markers.erase(std::remove_if(markers.begin(), markers.end(), [](const Marker& m) { return m.t > m.delay + 0.5f; }), markers.end());
     // 敵同士の押し合い
     for (size_t i = 0; i < enemies.size(); i++)
         for (size_t j = i + 1; j < enemies.size(); j++)
         {
             Enemy& a = enemies[i]; Enemy& b = enemies[j];
-            if (a.st == ESt::Dead || b.st == ESt::Dead) continue;
-            XMFLOAT3 d = Sub(b.pos, a.pos);
-            float l = LenXZ(d), m = a.radius + b.radius;
+            if (a.st == ESt::Dead || b.st == ESt::Dead || a.t == EType::RootArm || b.t == EType::RootArm) continue;
+            XMFLOAT3 dd = Sub(b.pos, a.pos);
+            float l = LenXZ(dd), m = a.radius + b.radius;
             if (l < m && l > 0.001f)
             {
-                XMFLOAT3 n = Mul(d, (m - l) * 0.5f / l);
+                XMFLOAT3 n = Mul(dd, (m - l) * 0.5f / l);
                 MoveCircle(a.pos, a.radius, -n.x, -n.z);
                 MoveCircle(b.pos, b.radius, n.x, n.z);
             }
@@ -870,25 +1287,44 @@ Controls Game::AutoControls(float dt)
 {
     Controls c;
     Actor& p = party[active];
-    if (p.st == ASt::Down || exitMenu) return c;
+    if (p.st == ASt::Down || exitMenu || menuOpen || qteOn || !dialog.empty()) return c;
+    c.dash = autoDash;
     Enemy* tgt = nullptr; float best = 13.f; int ti = -1;
     for (int i = 0; i < (int)enemies.size(); i++)
     {
         auto& e = enemies[i];
-        if (e.st == ESt::Dead) continue;
+        if (e.st == ESt::Dead || e.t == EType::RootArm) continue;
         float d = DistXZ(e.pos, p.pos);
         if (d < best && (e.st != ESt::Idle || d < 8)) { best = d; tgt = &e; ti = i; }
     }
+    const CharDef& D = Def(p);
     XMFLOAT3 goal{}; bool have = false; float stop = 0.6f;
-    if (tgt) { goal = tgt->pos; have = true; stop = Def(p).reach * 0.65f + tgt->radius; lockIdx = ti; }
+    Chest* nearChest = nullptr;
+    if (tgt) { goal = tgt->pos; have = true; stop = (autoGuard ? 3.2f : D.reach * 0.65f) + tgt->radius; lockIdx = ti; }
     else
     {
         lockIdx = -1;
         float bd = 1e9f;
-        for (auto& k : pickups) if (!k.taken) { float d = DistXZ(k.pos, p.pos); if (d < bd) { bd = d; goal = k.pos; have = true; } }
+        for (auto& ch : chests)
+            if (!ch.opened) { float d = DistXZ(ch.pos, p.pos) - (ch.kind == 2 ? 2.f : 0.f); if (d < bd) { bd = d; goal = ch.pos; have = true; nearChest = &ch; } }
+        for (auto& k : pickups) if (!k.taken) { float d = DistXZ(k.pos, p.pos); if (d < bd) { bd = d; goal = k.pos; have = true; nearChest = nullptr; } }
         if (!have) { goal = Sub(exitPos, Mul(exitFace, 1.5f)); have = true; }
+        stop = nearChest ? 1.3f : 0.5f;
+        if (nearChest && DistXZ(nearChest->pos, p.pos) < 1.6f) { c.interact = true; return c; }
     }
-    // 自動回避：突進の予備動作を見たら横へ
+    if (autoGuard || autoSpecial > 0)
+    {
+        c.guard = true;
+        if (autoGuard) lockIdx = -1;
+        if (autoSpecial > 0) autoSpecial -= dt;
+        if (tgt)
+        {
+            XMFLOAT3 dir = NormXZ(Sub(goal, p.pos));
+            XMFLOAT3 right{ std::cos(camYaw), 0, -std::sin(camYaw) }, fwd = Fwd(camYaw);
+            if (DistXZ(p.pos, goal) > stop) { c.mx = DotXZ(dir, right); c.mz = DotXZ(dir, fwd); }
+        }
+        return c;
+    }
     for (auto& e : enemies)
         if (e.st == ESt::Windup && e.t == EType::Rat && e.stT > 0.35f && DistXZ(e.pos, p.pos) < 4.f && p.st == ASt::Normal && RandI(0, 2) == 0)
         {
@@ -904,26 +1340,12 @@ Controls Game::AutoControls(float dt)
         XMFLOAT3 wp = (!tgt || d > 4.f) ? PathNext(p.pos, goal) : goal;
         XMFLOAT3 dir = NormXZ(Sub(wp, p.pos));
         XMFLOAT3 right{ std::cos(camYaw), 0, -std::sin(camYaw) }, fwd = Fwd(camYaw);
-        if (d > stop)
-        {
-            c.mx = DotXZ(dir, right);
-            c.mz = DotXZ(dir, fwd);
-        }
+        if (d > stop) { c.mx = DotXZ(dir, right); c.mz = DotXZ(dir, fwd); }
         if (tgt && d < stop + 0.8f)
         {
             autoAtkT -= dt;
-            if (autoHold > 0)
-            {
-                autoHold -= dt;
-                c.atkDown = autoHold > 0;
-            }
-            else if (autoAtkT <= 0)
-            {
-                autoCount++;
-                c.atkPressed = true; c.atkDown = true;
-                autoAtkT = 0.2f;
-                if (autoCount % 6 == 5) autoHold = 0.75f;
-            }
+            if (autoAtkT <= 0 && p.st == ASt::Normal && p.def != 1 && autoCount % 7 == 6) { autoCount++; autoSpecial = 0.7f; }
+            else if (autoAtkT <= 0) { autoCount++; c.atkPressed = true; c.atkDown = true; autoAtkT = 0.2f; }
         }
     }
     return c;
@@ -932,85 +1354,186 @@ Controls Game::AutoControls(float dt)
 // ------------------------------------------------------------------
 // 更新
 // ------------------------------------------------------------------
-void Game::UpdateDungeon(float dt, const Controls& c)
+void Game::UpdateDungeon(float dt, const Controls& cIn)
 {
+    Controls c = cIn;
     float gdt = dt;
     if (hitstop > 0) { hitstop -= dt; gdt = 0; }
-    Actor& P0 = party[active];
+
+    // 降り立つ演出（暗転が明けてから）
+    if (transOn && arriveT < 1.2f) { c = Controls{}; party[active].pos.y = 5.f; UpdateFollowCam(dt); return; }
+    if (arriveT < 1.2f)
+    {
+        float before = arriveT;
+        arriveT += dt;
+        float k = Saturate(arriveT / 0.5f);
+        party[active].pos.y = 5.f * (1 - k * k);
+        if (before < 0.5f && arriveT >= 0.5f)
+        {
+            party[active].pos.y = 0;
+            SpawnFx(1, Add(party[active].pos, F3(0, 0.2f, 0)), 4.f, C4(0.7f, 0.9f, 1.f), 0.5f);
+            SpawnFx(3, Add(party[active].pos, F3(0, 0.2f, 0)), 3.f, C4(0.55f, 0.6f, 0.7f, 0.8f), 0.6f);
+            shake = std::max(shake, 0.25f);
+        }
+        if (arriveT < 0.7f) c = Controls{};
+    }
+
+    if (menuOpen) { UpdateMenu(c); gdt = 0; c = Controls{}; }
+    else if (c.menu && !exitMenu && !qteOn && dialog.empty()) { menuOpen = true; menuTab = 0; menuSel = 0; menuChar = active; gdt = 0; c = Controls{}; }
+
+    UpdateFloorEvents(gdt, c);
+    if (qteOn || !dialog.empty()) { Controls keepCam; keepCam.camYaw = c.camYaw; c = keepCam; }
 
     if (exitMenu)
     {
         gdt = 0;
-        bool lockNext = (floorNo == 5 && RestoreRate() < 0.3f) || (floorNo == 9 && RestoreRate() < 0.6f);
-        if (c.up || c.down) exitSel = 1 - exitSel;
-        if (c.confirm)
+        std::wstring block = floorNo < MAX_FLOOR ? FloorBlock(floorNo + 1) : L"";
+        bool lockNext = !block.empty();
+        if (cIn.up || cIn.down) exitSel = 1 - exitSel;
+        if (cIn.confirm)
         {
             if (exitSel == 0)
             {
-                if (lockNext) ToastMsg(floorNo == 5 ? L"6階への扉は 復興率30% で開く" : L"10階への扉は 復興率60% で開く", RGBA(1, 0.6f, 0.5f));
-                else if (floorNo >= 10) { ToastMsg(L"第1章 クリア！", RGBA(1, 0.85f, 0.4f)); LeaveDungeon(false); return; }
-                else { exitMenu = false; EnterDungeon(floorNo + 1, (uint32_t)(GetTickCount() + floorNo * 101)); return; }
+                if (lockNext) ToastMsg(block, RGBA(1, 0.6f, 0.5f));
+                else if (floorNo >= MAX_FLOOR) { exitMenu = false; LeaveDungeon(false); }
+                else { exitMenu = false; GoToFloor(floorNo + 1); }
             }
-            else { exitMenu = false; LeaveDungeon(false); return; }
+            else { exitMenu = false; LeaveDungeon(false); }
         }
+        if (cIn.back) exitMenu = false;
     }
-    else
+    else if (!transOn)
     {
         // 灯
         float drain = floorNo >= 6 ? 0.5f : 0.333f;
         lantern = std::max(0.f, lantern - drain * gdt);
-        if (lantern <= 0)
-            for (auto& a : party) if (a.st != ASt::Down) { a.hp -= 1.5f * gdt; if (a.hp <= 0) { a.hp = 0; a.st = ASt::Down; } }
+        Actor& A0 = party[active];
+        if (lantern <= 0 && A0.st != ASt::Down) { A0.hp -= 1.5f * gdt; if (A0.hp <= 0) { A0.hp = 0; A0.st = ASt::Down; } }
 
-        camYaw += c.camYaw;
+        // カメラ：ロックオン中はマウスでの回転を弱め、敵の方へ自動で向く。ホイールで寄る／引く、V で背後に戻す
+        camYaw += lockIdx >= 0 ? c.camYaw * 0.25f : c.camYaw;
+        if (lockIdx < 0 && c.wheel != 0) camDist = Clampf(camDist - c.wheel * 0.006f, 4.5f, 11.f);
+        if (c.camReset) { camYaw = A0.yaw; camDist = 7.f; }
+        // ロックオン：Q で画面の正面にいちばん近い敵をロック／解除。R かホイールで次の敵へ切り替え
+        auto pickTarget = [&](int skip, float sideSign) {
+            int best = -1; float bs = 1e9f;
+            for (int i = 0; i < (int)enemies.size(); i++)
+            {
+                if (enemies[i].st == ESt::Dead || i == skip) continue;
+                if (enemies[i].t == EType::RootArm && !qteOn) continue;
+                float d = DistXZ(enemies[i].pos, A0.pos);
+                if (d > 16.f) continue;
+                XMFLOAT3 to = NormXZ(Sub(enemies[i].pos, A0.pos));
+                float facing = DotXZ(to, Fwd(camYaw));
+                if (facing < -0.3f) continue;
+                float score = d * (1.6f - facing);        // 近くて画面の真ん中に近いほど優先
+                if (sideSign != 0)
+                {
+                    // 切り替え：今の敵から見て右（左）にいる敵を優先
+                    XMFLOAT3 cur = NormXZ(Sub(enemies[skip].pos, A0.pos));
+                    float cross = cur.x * to.z - cur.z * to.x;
+                    if (cross * sideSign > 0) score *= 0.5f;
+                }
+                if (score < bs) { bs = score; best = i; }
+            }
+            return best;
+        };
         if (c.lockon)
         {
-            if (lockIdx >= 0) lockIdx = -1;
+            if (lockIdx >= 0) { lockIdx = -1; ToastMsg(L"ロックオン解除", RGBA(0.8f, 0.85f, 0.9f)); }
             else
             {
-                float bd = 14.f;
-                for (int i = 0; i < (int)enemies.size(); i++)
-                {
-                    if (enemies[i].st == ESt::Dead) continue;
-                    float d = DistXZ(enemies[i].pos, P0.pos);
-                    float facing = DotXZ(NormXZ(Sub(enemies[i].pos, P0.pos)), Fwd(camYaw));
-                    if (d < bd && facing > -0.2f) { bd = d; lockIdx = i; }
-                }
+                lockIdx = pickTarget(-1, 0);
+                if (lockIdx < 0) ToastMsg(L"近くにロックオンできる敵がいない", RGBA(0.8f, 0.85f, 0.9f));
             }
         }
-        if (lockIdx >= 0 && (enemies[lockIdx].st == ESt::Dead || DistXZ(enemies[lockIdx].pos, P0.pos) > 18)) lockIdx = -1;
-        if (c.swap && party[1 - active].st != ASt::Down)
+        else if (lockIdx >= 0 && (c.lockNext || c.wheel != 0))
         {
-            active = 1 - active;
-            ToastMsg(std::wstring(Def(party[active]).name) + L" に交代");
+            int n = pickTarget(lockIdx, c.wheel < 0 ? -1.f : 1.f);
+            if (n >= 0) lockIdx = n;
         }
-        if (c.item >= 0) { UseItem(c.item); if (scene != SceneId::Dungeon) return; }
+        if (lockIdx >= 0 && (enemies[lockIdx].st == ESt::Dead || DistXZ(enemies[lockIdx].pos, A0.pos) > 20))
+        {
+            // 倒したら近くの次の敵へ自動で移る
+            int prev = lockIdx; lockIdx = -1;
+            int n = pickTarget(prev, 0);
+            if (n >= 0 && DistXZ(enemies[n].pos, A0.pos) < 10.f) lockIdx = n;
+        }
+        // 交代（仲間は画面に出ず、交代すると入れ替わる）
+        if (c.swap)
+        {
+            int n = NextMember(active);
+            if (n >= 0) SwapTo(n); else ToastMsg(forceChar >= 0 ? std::wstring(L"この階は") + Def(party[forceChar]).name + L"しか戦えない" : std::wstring(L"交代できる仲間がいない"), RGBA(1, 0.8f, 0.7f));
+        }
+        if (c.item >= 0) { UseItem(c.item); if (scene != SceneId::Dungeon || transOn) return; }
 
         UpdateActor(party[active], &c, gdt, true);
-        UpdateActor(party[1 - active], nullptr, gdt, false);
-        if (party[active].st == ASt::Down && party[1 - active].st != ASt::Down) active = 1 - active;
-        if (party[0].st == ASt::Down && party[1].st == ASt::Down)
+        // 控えの仲間は少しずつ回復
+        for (int i = 0; i < 3; i++)
+            if (i != active && joined[i] && party[i].st != ASt::Down) party[i].hp = std::min(party[i].maxHp, party[i].hp + 1.0f * gdt);
+        if (party[active].st == ASt::Down)
         {
             downT += dt;
-            if (downT > 2.2f) { LeaveDungeon(true); return; }
+            int n = NextMember(active);
+            if (n >= 0 && downT > 0.8f) { downT = 0; SwapTo(n); ToastMsg(std::wstring(Def(party[n]).name) + L"が駆けつけた！", RGBA(1, 0.9f, 0.6f)); }
+            else if (n < 0 && downT > 2.0f) { downT = -100; LeaveDungeon(true); return; }
         }
-        UpdateEnemies(gdt);
+        // 会話している間は、敵は動かず攻撃もしない（飛んでいる弾も止まる）
+        bool talkingNow = !dialog.empty();
+        if (!talkingNow) UpdateEnemies(gdt);
 
         // 飛び道具
         for (auto& pr : projs)
         {
+            if (talkingNow) continue;
             pr.pos = Add(pr.pos, Mul(pr.vel, gdt));
             pr.life -= gdt;
-            if (Solid(pr.pos.x, pr.pos.z)) { pr.life = 0; SpawnFx(0, pr.pos, 1.f, C4(0.6f, 1, 0.6f), 0.3f); continue; }
-            for (auto& a : party)
+            // 壁で止まる。15階の柱は、敵の弾は止める（隠れられる）・味方の弾は柱に当たる（下で柱を削る）
+            if (SolidCell((int)std::floor(pr.pos.x / CELL), (int)std::floor(pr.pos.z / CELL)) || (!pr.friendly && !pillars.empty() && PillarSolid(pr.pos.x, pr.pos.z))) { pr.life = 0; SpawnFx(0, pr.pos, 1.f, pr.friendly ? C4(0.8f, 0.9f, 1) : C4(0.6f, 1, 0.6f), 0.3f); continue; }
+            if (pr.friendly)
             {
-                if (a.st == ASt::Down || pr.life <= 0) continue;
-                if (DistXZ(a.pos, pr.pos) < pr.radius + 0.45f)
+                // 15階：糸の柱に当たる
+                for (auto& pl : pillars)
+                    if (pl.alive && pl.grow >= 0.99f && pr.life > 0 && DistXZ(pl.pos, pr.pos) < 0.95f + pr.radius)
+                    {
+                        pl.hp -= pr.dmg; pl.flash = 1;
+                        AddNum(Add(pl.pos, F3(0, 3.f, 0)), (int)pr.dmg, RGBA(0.75f, 0.85f, 1.f), 24);
+                        if (pl.hp <= 0) BreakPillar(pl, false);
+                        if (!pr.pierce) pr.life = 0;
+                    }
+                for (int i = 0; i < (int)enemies.size() && i < 64; i++)
                 {
-                    DamageActor(a, pr.dmg, Sub(pr.pos, pr.vel), 4);
-                    pr.life = 0;
-                    SpawnFx(0, pr.pos, 1.4f, pr.kind == 0 ? C4(0.6f, 1, 0.5f) : C4(1, 1, 1), 0.35f);
+                    Enemy& e = enemies[i];
+                    if (e.st == ESt::Dead || (pr.hitMask >> i) & 1ull || pr.life <= 0) continue;
+                    if (DistXZ(e.pos, pr.pos) < pr.radius + e.radius && pr.pos.y < (e.t == EType::Spider || e.t == EType::Guardian || e.t == EType::Utsuro ? 5.f : 2.5f))
+                    {
+                        bool first = pr.hitMask == 0;
+                        pr.hitMask |= 1ull << i;
+                        HitEnemy(e, std::round(pr.dmg * RandF(0.92f, 1.08f)), Sub(pr.pos, pr.vel), pr.pierce ? 5.f : 2.5f, pr.pierce, &party[pr.owner]);
+                        if (first) { WeaponWear(party[pr.owner], 1); hitstop = std::max(hitstop, 0.03f); }
+                        if (!pr.pierce) pr.life = 0;
+                    }
                 }
+                continue;
+            }
+            Actor& a = party[active];
+            if (a.st == ASt::Guard && Def(a).badger)
+            {
+                XMFLOAT3 to = Sub(pr.pos, a.pos);
+                if (LenXZ(to) < 1.7f && DotXZ(NormXZ(to), Fwd(a.yaw)) > 0.3f)
+                {
+                    pr.life = 0;
+                    WeaponWear(a, 1);
+                    SpawnFx(0, pr.pos, 2.2f, C4(1, 0.85f, 0.6f), 0.4f);
+                    SpawnFx(1, pr.pos, 2.0f, C4(1, 0.7f, 0.5f), 0.35f);
+                    continue;
+                }
+            }
+            if (a.st != ASt::Down && DistXZ(a.pos, pr.pos) < pr.radius + 0.45f)
+            {
+                DamageActor(a, pr.dmg, Sub(pr.pos, pr.vel), 4);
+                pr.life = 0;
+                SpawnFx(0, pr.pos, 1.4f, pr.kind == 0 ? C4(0.6f, 1, 0.5f) : C4(1, 1, 1), 0.35f);
             }
         }
         projs.erase(std::remove_if(projs.begin(), projs.end(), [](const Projectile& p) { return p.life <= 0; }), projs.end());
@@ -1027,59 +1550,47 @@ void Game::UpdateDungeon(float dt, const Controls& c)
                 k.pos.y += k.vy * gdt;
                 if (k.pos.y < 0.6f) { k.pos.y = 0.6f; k.vy = 0; }
             }
-            float reach = k.k == PickKind::Crystal ? 1.3f : 1.1f;
-            if (DistXZ(k.pos, A.pos) < reach || DistXZ(k.pos, party[1 - active].pos) < reach)
+            if (k.k == PickKind::Money && DistXZ(k.pos, A.pos) < 3.f && k.t > 0.4f)
+                k.pos = Add(k.pos, Mul(NormXZ(Sub(A.pos, k.pos)), 8.f * dt));   // お金は吸い寄せる
+            if (DistXZ(k.pos, A.pos) < 1.1f && k.t > 0.3f)
             {
                 k.taken = true;
-                SpawnFx(2, Add(k.pos, F3(0, 0.6f, 0)), 2.5f, C4(0.6f, 0.95f, 1), 0.6f);
-                if (k.k == PickKind::Crystal)
-                {
-                    PartType pt = NextCrystalPart();
-                    inventory[pt]++;
-                    crystalsThisRun++;
-                    ToastMsg(L"記憶の結晶：" + std::wstring(kParts[pt].name), RGBA(0.6f, 0.95f, 1));
-                }
-                else if (k.k == PickKind::Key) { hasKey = true; ToastMsg(L"鍵を手に入れた！ 出口の封印を解こう", RGBA(1, 0.85f, 0.4f)); }
-                else { items[0]++; ToastMsg(L"薬草を拾った", RGBA(0.6f, 1, 0.6f)); }
+                SpawnFx(2, Add(k.pos, F3(0, 0.6f, 0)), 1.8f, k.k == PickKind::Money ? C4(1, 0.85f, 0.4f) : C4(0.6f, 0.95f, 1), 0.5f);
+                if (k.k == PickKind::Key) { hasKey = true; ToastMsg(L"鍵を手に入れた！ 出口の封印を解こう", RGBA(1, 0.85f, 0.4f)); }
+                else if (k.k == PickKind::Herb) { items[0]++; ToastMsg(L"薬草を拾った", RGBA(0.6f, 1, 0.6f)); }
+                else if (k.k == PickKind::Money) { money += k.value; }
             }
         }
 
         // 調べる
         interactHint.clear();
         Chest* nc = nullptr; Spring* ns = nullptr;
-        for (auto& ch : chests) if (!ch.opened && DistXZ(ch.pos, A.pos) < 1.9f) nc = &ch;
+        for (auto& ch : chests) if (!ch.opened && DistXZ(ch.pos, A.pos) < (ch.kind == 1 ? 2.3f : 1.9f)) nc = &ch;
         for (auto& s : springs) if (!s.used && DistXZ(s.pos, A.pos) < 2.4f) ns = &s;
         bool nearExit = DistXZ(exitPos, A.pos) < 2.8f;
-        if (nc) interactHint = L"[E] 宝箱を開ける";
+        if (nc) interactHint = nc->kind == 2 ? L"[E] 糸巻きをほどく（ジオラマパーツ）" : nc->kind == 1 ? L"[E] 武器の宝箱を開ける" : L"[E] 宝箱を開ける";
         else if (ns) interactHint = L"[E] 泉の水で 灯をともす";
         else if (nearExit) interactHint = hasKey ? L"[E] 封印を解く" : L"[E] 封印の扉を調べる";
         if (c.interact)
         {
-            if (nc)
-            {
-                nc->opened = true;
-                int it = RandI(0, 3);
-                const wchar_t* names[4] = { L"薬草", L"灯油", L"研ぎ粉", L"帰り糸" };
-                items[it]++;
-                ToastMsg(std::wstring(L"宝箱から ") + names[it] + L" を手に入れた", RGBA(1, 0.9f, 0.6f));
-                SpawnFx(2, Add(nc->pos, F3(0, 1, 0)), 2.5f, C4(1, 0.9f, 0.5f), 0.6f);
-            }
+            if (nc) OpenChest(*nc);
             else if (ns)
             {
                 ns->used = true;
                 lantern = 100;
-                for (auto& a : party) if (a.st != ASt::Down) a.hp = std::min(a.maxHp, a.hp + 30);
+                A.hp = std::min(A.maxHp, A.hp + 30);
                 ToastMsg(L"泉の水で灯がともった", RGBA(0.6f, 0.9f, 1));
                 SpawnFx(2, Add(ns->pos, F3(0, 1, 0)), 3.5f, C4(0.6f, 0.9f, 1), 0.8f);
             }
             else if (nearExit)
             {
-                if (!hasKey) ToastMsg(L"封印されている…「鍵持ち」を倒して鍵を手に入れよう", RGBA(1, 0.75f, 0.6f));
+                if (!hasKey) ToastMsg(floorNo == 7 ? L"根に塞がれている…根の主の腕を断ち切らないと進めない" : L"封印されている…「鍵持ち」を倒して鍵を手に入れよう", RGBA(1, 0.75f, 0.6f));
                 else { exitMenu = true; exitSel = 0; }
             }
         }
+        for (auto& ch : chests) if (ch.opened) ch.openT += dt;
 
-        // 見た場所をミニマップに記録
+        // ミニマップ
         int cx = (int)(A.pos.x / CELL), cz = (int)(A.pos.z / CELL);
         int rr = RoomAt(A.pos);
         if (rr >= 0)
@@ -1100,19 +1611,94 @@ void Game::UpdateDungeon(float dt, const Controls& c)
     for (auto& n : nums) { n.t += dt; n.pos.y += dt * 0.9f; }
     nums.erase(std::remove_if(nums.begin(), nums.end(), [](const DmgNum& n) { return n.t > 0.9f; }), nums.end());
     shake = std::max(0.f, shake - dt * 1.5f);
+    UpdateFollowCam(dt);
+}
 
-    // カメラ（背後追従＋壁との衝突補正）
-    Actor& Pa = party[active];
-    if (lockIdx >= 0)
+// 宝箱を開ける
+void Game::OpenChest(Chest& ch)
+{
+    ch.opened = true; ch.openT = 0;
+    XMFLOAT3 top = Add(ch.pos, F3(0, 1.0f, 0));
+    if (ch.kind == 2)
     {
-        float ty = YawOf(Sub(enemies[lockIdx].pos, Pa.pos));
-        camYaw = ApproachAngle(camYaw, ty, dt * 3.f);
+        int k = ch.loot;
+        if (k < 0) for (int i = 0; i < LOOT_N && k < 0; i++) if (LootValid(floorNo, i) && !((floorGot[floorNo] >> i) & 1)) k = i;
+        if (k >= 0) TakeLoot(floorNo, k);
+        else ToastMsg(L"糸巻きは空っぽだった（この階のパーツは集め終わっている）", RGBA(0.8f, 0.85f, 0.9f));
+        SpawnFx(2, top, 3.5f, C4(1, 0.85f, 0.5f), 0.8f);
+        SpawnFx(1, top, 3.0f, C4(1, 0.8f, 0.5f), 0.5f);
     }
-    else if (autopilot && Pa.speedNow > 0.5f) camYaw = ApproachAngle(camYaw, Pa.yaw, dt * 1.5f);
+    else if (ch.kind == 1)
+    {
+        if (ch.key) { hasKey = true; ToastMsg(L"鍵を手に入れた！ 出口が開いた", RGBA(1, 0.85f, 0.4f)); }
+        std::vector<int> cand;
+        for (int w = 0; w < W_COUNT; w++)
+        {
+            if (!joined[kWeapons[w].owner]) continue;
+            bool owned = false;
+            for (auto& o : weapons) if (o.def == w) owned = true;
+            if (!owned) cand.push_back(w);
+        }
+        if (!cand.empty())
+        {
+            int w = cand[RandI(0, (int)cand.size() - 1)];
+            GiveWeapon(w);
+            ToastMsg(L"武器：" + std::wstring(kWeapons[w].name) + L" を手に入れた！（Esc→武器で装備）", RGBA(1, 0.8f, 0.4f));
+        }
+        else
+        {
+            int t = RandI(0, AT_COUNT - 1);
+            attInv[t] += 2;
+            ToastMsg(L"アタッチメント：" + std::wstring(kAttach[t].name) + L" ×2", RGBA(1, 0.8f, 0.4f));
+        }
+        SpawnFx(2, top, 4.f, C4(1, 0.8f, 0.4f), 0.8f);
+    }
+    else
+    {
+        int r = RandI(0, 9);
+        if (r < 5)
+        {
+            int it = RandI(0, ITEM_N - 1);
+            const wchar_t* names[ITEM_N] = { L"薬草", L"灯油", L"研ぎ粉", L"帰り糸", L"繕い糸" };
+            items[it]++;
+            ToastMsg(std::wstring(L"宝箱から ") + names[it] + L" を手に入れた", RGBA(1, 0.9f, 0.6f));
+        }
+        else if (r < 8)
+        {
+            int t = RandI(0, AT_COUNT - 1);
+            attInv[t]++;
+            ToastMsg(L"アタッチメント：" + std::wstring(kAttach[t].name) + L"（" + kAttach[t].desc + L"）", RGBA(0.8f, 0.9f, 1));
+        }
+        else
+        {
+            int m = RandI(30, 60);
+            money += m;
+            ToastMsg(L"宝箱から " + std::to_wstring(m) + L" 文 を手に入れた", RGBA(1, 0.9f, 0.5f));
+        }
+        SpawnFx(2, top, 2.5f, C4(1, 0.9f, 0.5f), 0.6f);
+    }
+}
+
+// カメラ（背後追従＋壁との衝突補正）。町歩きでも使う
+void Game::UpdateFollowCam(float dt)
+{
+    Actor& Pa = party[active];
+    bool locked = scene == SceneId::Dungeon && lockIdx >= 0 && lockIdx < (int)enemies.size();
+    float dist = camDist;
+    if (locked)
+    {
+        // ロックオンカメラ：自分の肩ごしに敵を正面に見る。離れているほど少し引いて両方を画面に入れる
+        const Enemy& e = enemies[lockIdx];
+        float ty = YawOf(Sub(e.pos, Pa.pos));
+        camYaw = ApproachAngle(camYaw, ty, dt * 5.f);
+        dist = camDist + std::min(4.f, DistXZ(e.pos, Pa.pos) * 0.3f) + (e.radius > 1.5f ? 2.f : 0.f);
+    }
+    else if (autopilot && !autoGuard && Pa.speedNow > 0.5f) camYaw = ApproachAngle(camYaw, Pa.yaw, dt * 1.5f);
     XMFLOAT3 target = Add(Pa.pos, F3(0, 1.3f, 0));
-    if (lockIdx >= 0) target = Lerp3(target, Add(enemies[lockIdx].pos, F3(0, 1.0f, 0)), 0.25f);
+    target.y = std::max(1.3f, target.y);
+    if (locked) target = Lerp3(target, Add(enemies[lockIdx].pos, F3(0, 1.0f, 0)), 0.35f);
     XMFLOAT3 f = Fwd(camYaw);
-    XMFLOAT3 desired = Add(target, F3(-f.x * camDist * std::cos(camPitch), camDist * std::sin(camPitch), -f.z * camDist * std::cos(camPitch)));
+    XMFLOAT3 desired = Add(target, F3(-f.x * dist * std::cos(camPitch), dist * std::sin(camPitch), -f.z * dist * std::cos(camPitch)));
     for (float t = 0.3f; t <= 1.0f; t += 0.04f)
     {
         XMFLOAT3 q = Lerp3(target, desired, t);
@@ -1122,392 +1708,6 @@ void Game::UpdateDungeon(float dt, const Controls& c)
             break;
         }
     }
-    camPosNow = Lerp3(camPosNow, desired, Saturate(dt * 9));
+    camPosNow = Lerp3(camPosNow, desired, Saturate(dt * (arriveT < 1.2f ? 4.f : 9.f)));
     camTargetNow = Lerp3(camTargetNow, target, Saturate(dt * 12));
-}
-
-// ------------------------------------------------------------------
-// 描画
-// ------------------------------------------------------------------
-void Game::RenderDungeon()
-{
-    FrameSettings fs;
-    bool deep = floorNo >= 6;
-    float lk = Saturate(lantern / 100.f);
-    XMFLOAT3 sh{ 0, 0, 0 };
-    if (shake > 0) sh = F3(std::sin(time * 71) * shake * 0.25f, std::sin(time * 53) * shake * 0.2f, std::cos(time * 67) * shake * 0.25f);
-    fs.camPos = Add(camPosNow, sh);
-    fs.camTarget = Add(camTargetNow, Mul(sh, 0.5f));
-    fs.time = time;
-    fs.fogColor = deep ? F3(0.07f, 0.06f, 0.11f) : F3(0.06f, 0.09f, 0.13f);
-    fs.clear = fs.fogColor;
-    fs.fogStart = Lerpf(2.f, 8.f, lk);
-    fs.fogEnd = Lerpf(12.f, deep ? 26.f : 32.f, SmoothStep(0.f, 0.5f, lk));
-    fs.fogMax = 1.f;
-    fs.ambient = deep ? F3(0.27f, 0.24f, 0.38f) : F3(0.3f, 0.34f, 0.44f);
-    fs.lightDir = F3(0.35f, -1.f, 0.5f);
-    fs.lightColor = deep ? F3(0.42f, 0.4f, 0.62f) : F3(0.45f, 0.52f, 0.66f);
-    Actor& A = party[active];
-    fs.lights.push_back({ Add(A.pos, F3(0, 2.4f, 0)), 6.f + 8.f * lk, Mul(F3(1.25f, 0.85f, 0.5f), 0.45f + 0.75f * lk) });
-    for (auto& k : pickups)
-        if (!k.taken) fs.lights.push_back({ Add(k.pos, F3(0, 1.0f, 0)), k.k == PickKind::Crystal ? 4.5f : 3.f,
-                                            k.k == PickKind::Crystal ? F3(0.3f, 0.8f, 1.0f) : F3(1.0f, 0.8f, 0.3f) });
-    for (auto& d : decos) if (d.kind == 1) fs.lights.push_back({ Add(d.pos, F3(0, 0.6f, 0)), 3.2f, F3(0.15f, 0.6f, 0.55f) });
-    fs.lights.push_back({ Add(exitPos, F3(0, 1.6f, -1.0f)), 6.f, hasKey ? F3(1.0f, 0.8f, 0.35f) : F3(0.6f, 0.35f, 0.9f) });
-    for (auto& s : springs) fs.lights.push_back({ Add(s.pos, F3(0, 0.8f, 0)), 5.f, s.used ? F3(0.2f, 0.3f, 0.4f) : F3(0.35f, 0.7f, 1.0f) });
-    for (auto& p : projs) fs.lights.push_back({ p.pos, 3.f, p.kind == 0 ? F3(0.5f, 1.0f, 0.4f) : F3(0.8f, 0.8f, 1.0f) });
-    for (auto& f : fx) if (f.kind == 0) fs.lights.push_back({ f.pos, 3.5f * (1 - f.t / f.dur), F3(1.2f, 0.8f, 0.4f) });
-    R->BeginFrame(fs);
-
-    // 地形
-    DrawParams fl; fl.tex = T["cave_floor"]; fl.color = deep ? C4(0.8f, 0.75f, 0.95f) : C4(0.85f, 0.9f, 1.0f); fl.rim = 0;
-    R->Draw(floorMesh, XMMatrixIdentity(), fl);
-    DrawParams wl; wl.tex = T["cave_wall"]; wl.color = deep ? C4(0.75f, 0.68f, 0.9f) : C4(0.82f, 0.88f, 1.0f); wl.rim = 0.1f;
-    R->Draw(wallMesh, XMMatrixIdentity(), wl);
-
-    // 飾り
-    for (auto& d : decos)
-    {
-        DrawParams p;
-        switch (d.kind)
-        {
-        case 0:
-        {
-            p.tex = T["bark"]; p.color = C4(0.55f, 0.42f, 0.32f); p.outline = 0.02f;
-            XMFLOAT3 in = Fwd(d.rot);
-            XMFLOAT3 top = Add(d.pos, F3(0, WALL_H * 0.95f, 0));
-            XMFLOAT3 mid = Add(d.pos, Add(Mul(in, 0.6f * d.scale), F3(std::sin(d.tilt) * 0.4f, 1.2f, std::cos(d.tilt) * 0.2f)));
-            XMFLOAT3 bot = Add(d.pos, Add(Mul(in, 1.1f * d.scale), F3(d.tilt, 0, 0)));
-            Seg(top, mid, 0.28f * d.scale, p);
-            Seg(mid, bot, 0.2f * d.scale, p);
-            break;
-        }
-        case 1:
-        {
-            float s = d.scale;
-            p.color = C4(0.85f, 0.88f, 0.85f);
-            R->Draw(R->cylinder, XMMatrixScaling(0.12f * s, 0.35f * s, 0.12f * s) * XMMatrixTranslation(d.pos.x, 0, d.pos.z), p);
-            DrawParams cp; cp.color = C4(0.2f, 0.7f, 0.65f); cp.emissive = { 0.1f, 0.45f, 0.42f }; cp.outline = 0.015f;
-            R->Draw(R->sphere, XMMatrixScaling(0.4f * s, 0.2f * s, 0.4f * s) * XMMatrixTranslation(d.pos.x, 0.36f * s, d.pos.z), cp);
-            R->Draw(R->cylinder, XMMatrixScaling(0.08f * s, 0.22f * s, 0.08f * s) * XMMatrixTranslation(d.pos.x + 0.25f, 0, d.pos.z + 0.1f), p);
-            R->Draw(R->sphere, XMMatrixScaling(0.24f * s, 0.12f * s, 0.24f * s) * XMMatrixTranslation(d.pos.x + 0.25f, 0.22f * s, d.pos.z + 0.1f), cp);
-            break;
-        }
-        case 2:
-            p.tex = T["cave_wall"]; p.color = C4(0.7f, 0.75f, 0.85f); p.outline = 0.015f;
-            R->Draw(R->sphere, XMMatrixScaling(1.2f * d.scale, 0.7f * d.scale, 1.0f * d.scale) * XMMatrixRotationY(d.rot) * XMMatrixTranslation(d.pos.x, 0.1f, d.pos.z), p);
-            break;
-        case 3:
-        {
-            DrawParams cp; cp.color = deep ? C4(0.6f, 0.4f, 0.9f) : C4(0.45f, 0.55f, 0.95f);
-            cp.emissive = deep ? F3(0.2f, 0.1f, 0.35f) : F3(0.08f, 0.15f, 0.35f); cp.rim = 0.5f;
-            for (int i = 0; i < 3; i++)
-            {
-                float a = d.rot + i * 2.1f;
-                R->Draw(R->octa, XMMatrixScaling(0.25f * d.scale, (0.9f - i * 0.2f) * d.scale, 0.25f * d.scale) * XMMatrixRotationZ(0.3f * std::sin(a)) * XMMatrixRotationY(a) *
-                                 XMMatrixTranslation(d.pos.x + std::cos(a) * 0.25f, 0.3f * d.scale, d.pos.z + std::sin(a) * 0.25f), cp);
-            }
-            break;
-        }
-        }
-    }
-
-    // 出口（封印の扉）
-    {
-        float yaw = YawOf(exitFace);
-        XMMATRIX base = XMMatrixRotationY(yaw) * XMMatrixTranslation(exitPos.x, 0, exitPos.z);
-        DrawParams seal; seal.tex = hasKey ? T["seal_open"] : T["seal_closed"]; seal.unlit = true; seal.fog = 0.3f;
-        seal.color = C4(1, 1, 1);
-        R->Draw(R->quad, XMMatrixScaling(1.9f, 2.6f, 1) * XMMatrixTranslation(0, 1.35f, -0.03f) * base, seal);
-        DrawParams wd; wd.color = C4(0.45f, 0.25f, 0.2f); wd.outline = 0.02f;
-        R->Draw(R->cube, XMMatrixScaling(0.28f, 3.0f, 0.28f) * XMMatrixTranslation(-1.05f, 1.5f, -0.2f) * base, wd);
-        R->Draw(R->cube, XMMatrixScaling(0.28f, 3.0f, 0.28f) * XMMatrixTranslation(1.05f, 1.5f, -0.2f) * base, wd);
-        R->Draw(R->cube, XMMatrixScaling(2.8f, 0.25f, 0.4f) * XMMatrixTranslation(0, 3.0f, -0.2f) * base, wd);
-        DrawParams rp; rp.tex = T["rope"]; rp.color = C4(1, 0.92f, 0.7f); rp.uv = { 4, 1, 0, 0.35f };
-        R->Draw(R->cylinder, XMMatrixScaling(0.2f, 2.3f, 0.2f) * XMMatrixRotationZ(PI / 2) * XMMatrixTranslation(1.15f, 2.7f, -0.3f) * base, rp);
-    }
-
-    // 宝箱
-    for (auto& ch : chests)
-    {
-        XMMATRIX b = XMMatrixRotationY(ch.yaw) * XMMatrixTranslation(ch.pos.x, 0, ch.pos.z);
-        DrawShadow(ch.pos, 1.6f);
-        DrawParams p; p.color = C4(0.6f, 0.15f, 0.12f); p.outline = 0.02f;
-        R->Draw(R->cube, XMMatrixScaling(1.0f, 0.55f, 0.65f) * XMMatrixTranslation(0, 0.3f, 0) * b, p);
-        DrawParams g; g.color = C4(0.95f, 0.75f, 0.3f); g.emissive = { 0.1f, 0.07f, 0.02f };
-        R->Draw(R->cube, XMMatrixScaling(1.04f, 0.1f, 0.69f) * XMMatrixTranslation(0, 0.5f, 0) * b, g);
-        float open = ch.opened ? -1.4f : 0;
-        R->Draw(R->cube, XMMatrixScaling(1.0f, 0.22f, 0.65f) * XMMatrixTranslation(0, 0.11f, 0.32f) * XMMatrixRotationX(open) * XMMatrixTranslation(0, 0.58f, -0.32f) * b, p);
-        R->Draw(R->cube, XMMatrixScaling(0.18f, 0.2f, 0.05f) * XMMatrixTranslation(0, 0.5f, -0.34f) * b, g);
-    }
-    // 泉
-    for (auto& s : springs)
-    {
-        DrawParams st; st.tex = T["spring"]; st.outline = 0.02f;
-        R->Draw(R->cylinder, XMMatrixScaling(2.4f, 0.45f, 2.4f) * XMMatrixTranslation(s.pos.x, 0, s.pos.z), st);
-        DrawParams w; w.tex = T["water"]; w.uv = { 1, 1, time * 0.05f, 0 }; w.color = s.used ? C4(0.4f, 0.5f, 0.6f) : C4(0.6f, 0.9f, 1);
-        w.emissive = s.used ? F3(0, 0, 0) : F3(0.1f, 0.3f, 0.45f);
-        R->Draw(R->cylinder, XMMatrixScaling(2.0f, 0.02f, 2.0f) * XMMatrixTranslation(s.pos.x, 0.42f, s.pos.z), w);
-    }
-
-    // 拾い物
-    for (auto& k : pickups)
-    {
-        if (k.taken) continue;
-        float b = std::sin(k.t * 2.5f) * 0.15f;
-        XMFLOAT3 p = Add(k.pos, F3(0, k.k == PickKind::Crystal ? 0.9f + b : b * 0.5f, 0));
-        if (k.k == PickKind::Crystal)
-        {
-            DrawShadow(k.pos, 1.0f, 0.35f);
-            DrawParams cp; cp.color = C4(0.55f, 0.9f, 1.0f); cp.emissive = { 0.25f, 0.55f, 0.7f }; cp.rim = 0.8f; cp.outline = 0.015f;
-            R->Draw(R->octa, XMMatrixScaling(0.45f, 0.8f, 0.45f) * XMMatrixRotationY(k.t * 1.5f) * XMMatrixTranslation(p.x, p.y, p.z), cp);
-            R->DrawBillboard(T["glint"], p, 2.2f, 2.2f, C4(0.5f, 0.9f, 1.f, 0.7f), Blend::Add, { 1, 1, 0, 0 }, k.t * 0.5f);
-        }
-        else if (k.k == PickKind::Key)
-        {
-            DrawParams g; g.color = C4(1.f, 0.8f, 0.3f); g.emissive = { 0.4f, 0.3f, 0.05f }; g.outline = 0.015f;
-            XMMATRIX b2 = XMMatrixRotationY(k.t * 2) * XMMatrixTranslation(p.x, p.y + 0.3f, p.z);
-            R->Draw(R->cylinder, XMMatrixScaling(0.4f, 0.08f, 0.4f) * XMMatrixRotationX(PI / 2) * XMMatrixTranslation(0, 0.3f, 0) * b2, g);
-            R->Draw(R->cube, XMMatrixScaling(0.08f, 0.5f, 0.08f) * XMMatrixTranslation(0, -0.05f, 0) * b2, g);
-            R->Draw(R->cube, XMMatrixScaling(0.16f, 0.08f, 0.08f) * XMMatrixTranslation(0.08f, -0.25f, 0) * b2, g);
-            R->DrawBillboard(T["glint"], Add(p, F3(0, 0.3f, 0)), 2.f, 2.f, C4(1, 0.85f, 0.4f, 0.7f), Blend::Add);
-        }
-        else
-        {
-            DrawParams g; g.color = C4(0.4f, 0.8f, 0.35f); g.outline = 0.015f;
-            R->Draw(R->sphere, XMMatrixScaling(0.35f, 0.2f, 0.35f) * XMMatrixTranslation(p.x, p.y + 0.1f, p.z), g);
-            R->Draw(R->sphere, XMMatrixScaling(0.2f, 0.35f, 0.2f) * XMMatrixTranslation(p.x + 0.1f, p.y + 0.25f, p.z), g);
-        }
-    }
-
-    // 敵
-    for (auto& e : enemies) DrawEnemy(e);
-
-    // パーティ
-    for (int i = 0; i < 2; i++)
-    {
-        const Actor& a = party[i];
-        if (a.def == 0) DrawSora(a, 1); else DrawKurobee(a, 1);
-    }
-    DrawTsumugi(Add(A.pos, Add(Mul(Fwd(A.yaw + 2.4f), 0.9f), F3(0, 2.0f + std::sin(time * 2.2f) * 0.15f, 0))));
-
-    // 飛び道具
-    for (auto& p : projs)
-    {
-        DrawParams g; g.unlit = true;
-        g.color = p.kind == 0 ? C4(0.6f, 1.f, 0.45f) : C4(0.95f, 0.95f, 1.f);
-        R->Draw(R->sphere, XMMatrixScaling(0.35f, 0.35f, 0.35f) * XMMatrixTranslation(p.pos.x, p.pos.y, p.pos.z), g);
-        R->DrawBillboard(T["glint"], p.pos, 1.6f, 1.6f, p.kind == 0 ? C4(0.5f, 1, 0.4f, 0.8f) : C4(1, 1, 1, 0.7f), Blend::Add, { 1, 1, 0, 0 }, time * 4);
-    }
-
-    // マーカー
-    for (auto& e : enemies)
-    {
-        if (e.st == ESt::Dead) continue;
-        float h = e.t == EType::Spider ? 4.2f : 1.9f;
-        if (e.st == ESt::Notice)
-            R->DrawBillboard(T["exclaim"], Add(e.pos, F3(0, h + 0.3f, 0)), 0.9f, 0.9f, C4(1, 1, 1, 1), Blend::Alpha, { 1, 1, 0, 0 }, 0, false, 0);
-        if (e.keyHolder)
-            R->DrawBillboard(T["glint"], Add(e.pos, F3(0, h, 0)), 1.2f, 1.2f, C4(1, 0.85f, 0.3f, 0.9f), Blend::Add, { 1, 1, 0, 0 }, time * 2);
-    }
-    if (lockIdx >= 0)
-    {
-        const Enemy& e = enemies[lockIdx];
-        float h = e.t == EType::Spider ? 1.6f : 0.8f;
-        R->DrawBillboard(T["lockon"], Add(e.pos, F3(0, h, 0)), 1.4f + (e.t == EType::Spider ? 2.f : 0.f), 1.4f + (e.t == EType::Spider ? 2.f : 0.f),
-                         C4(1, 0.85f, 0.4f, 0.95f), Blend::Alpha, { 1, 1, 0, 0 }, time * 1.5f, false, 0);
-    }
-
-    // エフェクト（連番画像）
-    for (auto& f : fx)
-    {
-        float k = f.t / f.dur;
-        if (f.kind == 0 || f.kind == 1)
-        {
-            int frame = std::min(15, (int)(k * 16));
-            XMFLOAT4 uv{ 0.25f, 0.25f, (frame % 4) * 0.25f, (frame / 4) * 0.25f };
-            XMFLOAT4 col = f.color; col.w = 1.f;
-            R->DrawBillboard(f.kind == 0 ? T["spark"] : T["ring"], f.pos, f.size, f.size, col, Blend::Add, uv, f.rot, true, 0.3f);
-        }
-        else
-        {
-            XMFLOAT4 col = f.color; col.w = 1 - k;
-            R->DrawBillboard(T["glint"], f.pos, f.size * (0.5f + k), f.size * (0.5f + k), col, Blend::Add, { 1, 1, 0, 0 }, f.rot + k * 2);
-        }
-    }
-
-    // 画面効果
-    float hpK = A.hp / A.maxHp;
-    if (lantern < 30)
-        R->DrawScreenOverlay(T["inkborder"], C4(0, 0, 0, Saturate((30 - lantern) / 22.f) * 0.95f), Blend::Alpha);
-    if (hpK < 0.4f || A.invuln > 0.2f)
-    {
-        float a = std::max(Saturate((0.4f - hpK) / 0.3f) * (0.6f + 0.25f * std::sin(time * 6)), A.invuln > 0.2f ? 0.6f : 0.f);
-        R->DrawScreenOverlay(T["vignette"], C4(1, 1, 1, a), Blend::Alpha);
-    }
-}
-
-void Game::DrawDungeonUI()
-{
-    float W = (float)R->W, H = (float)R->H;
-    wchar_t buf[128];
-    Actor& A = party[active];
-    Actor& B = party[1 - active];
-    const CharDef& d = Def(A);
-
-    // 敵のHP・ダメージ数字
-    for (auto& e : enemies)
-    {
-        if (e.st == ESt::Dead || e.t == EType::Spider) continue;
-        if (e.hp >= e.maxHp && !e.keyHolder) continue;
-        float sx, sy;
-        if (!R->Project(Add(e.pos, F3(0, 1.75f, 0)), sx, sy)) continue;
-        Bar(sx - 30, sy, 60, 7, e.hp / e.maxHp, RGBA(0.9f, 0.3f, 0.3f), RGBA(0, 0, 0, 0.6f));
-        if (e.keyHolder)
-        {
-            R->FillCircle(sx - 44, sy + 3, 11, RGBA(0.9f, 0.7f, 0.25f));
-            R->Text(L"鍵", sx - 55, sy - 7, 22, 20, 13, RGBA(0.2f, 0.12f, 0.05f), 1, true, false);
-        }
-    }
-    for (auto& n : nums)
-    {
-        float sx, sy;
-        if (!R->Project(n.pos, sx, sy)) continue;
-        float pop = n.t < 0.1f ? 1.f + (0.1f - n.t) * 4 : 1.f;
-        D2D1_COLOR_F c = n.col; c.a = Saturate((0.9f - n.t) / 0.3f);
-        float s = n.size * pop;
-        R->Text(std::to_wstring(n.val), sx - 60, sy - s * 0.6f, 120, s * 1.3f, s, c, 1, true, true);
-    }
-
-    // 左上：ステータス
-    R->FillRound(16, 14, 410, 150, 12, RGBA(0.05f, 0.07f, 0.13f, 0.78f));
-    R->FillCircle(52, 52, 26, d.badger ? RGBA(0.45f, 0.45f, 0.5f) : RGBA(0.2f, 0.3f, 0.6f));
-    R->StrokeCircle(52, 52, 26, RGBA(0.9f, 0.65f, 0.3f), 2.5f);
-    R->Text(d.badger ? L"ク" : L"ソ", 30, 34, 44, 40, 24, RGBA(1, 1, 1), 1, true, false);
-    R->Text(d.name, 88, 20, 150, 30, 21, RGBA(1, 0.95f, 0.85f), 0, true);
-    swprintf_s(buf, L"HP %d / %d", (int)std::ceil(A.hp), (int)A.maxHp);
-    R->Text(buf, 260, 23, 150, 24, 14, RGBA(1, 1, 1, 0.85f), 2);
-    float hk = A.hp / A.maxHp;
-    Bar(88, 50, 320, 13, hk, hk > 0.35f ? RGBA(0.45f, 0.85f, 0.45f) : RGBA(0.95f, 0.35f, 0.3f), RGBA(0.15f, 0.15f, 0.2f, 0.9f));
-    // 灯
-    R->Text(L"灯", 88, 72, 24, 24, 15, RGBA(1, 0.8f, 0.4f), 0, true);
-    bool lanternLow = lantern < 25;
-    float blink = lanternLow ? 0.6f + 0.4f * std::sin(time * 8) : 1.f;
-    Bar(110, 78, 298, 11, lantern / 100.f, RGBA(1.f, 0.7f, 0.25f, blink), RGBA(0.15f, 0.15f, 0.2f, 0.9f));
-    // 武器
-    float dk = A.maxDur > 0 ? A.dur / A.maxDur : 0;
-    D2D1_COLOR_F wc = RGBA(0.85f, 0.9f, 1);
-    if (!A.broken && dk <= 0.1f) wc = RGBA(1, 0.3f, 0.25f, 0.55f + 0.45f * std::sin(time * 12));
-    else if (!A.broken && dk <= 0.25f) wc = RGBA(1, 0.85f, 0.25f);
-    swprintf_s(buf, L"%s  Lv%d", A.broken ? d.spare : d.weapon, A.lvl);
-    R->Text(buf, 24, 100, 260, 24, 16, A.broken ? RGBA(0.7f, 0.7f, 0.75f) : RGBA(1, 1, 1), 0, true);
-    if (A.broken) R->Text(L"（予備・壊れない）", 220, 101, 190, 24, 14, RGBA(1, 0.6f, 0.5f), 2);
-    else
-    {
-        swprintf_s(buf, L"耐久 %d / %d", (int)A.dur, (int)A.maxDur);
-        R->Text(buf, 220, 101, 190, 24, 14, wc, 2, true);
-    }
-    Bar(24, 126, 384, 9, A.broken ? 0.f : dk, wc, RGBA(0.15f, 0.15f, 0.2f, 0.9f));
-    Bar(24, 142, 384, 5, A.exp / (100.f * A.lvl), RGBA(0.55f, 0.75f, 1.f), RGBA(0.15f, 0.15f, 0.2f, 0.9f));
-    if (!A.broken && dk <= 0.1f)
-        R->Text(L"⚠ 刃が欠けそう！", 270, 150, 160, 24, 14, wc, 2, true);
-
-    // 控え
-    const CharDef& bd = Def(B);
-    R->FillRound(16, 172, 250, 52, 10, RGBA(0.05f, 0.07f, 0.13f, 0.7f));
-    R->FillCircle(42, 198, 17, bd.badger ? RGBA(0.45f, 0.45f, 0.5f) : RGBA(0.2f, 0.3f, 0.6f));
-    R->Text(bd.badger ? L"ク" : L"ソ", 25, 186, 34, 26, 16, RGBA(1, 1, 1), 1, true, false);
-    R->Text(std::wstring(bd.name) + L"（控え）", 66, 178, 190, 22, 14, RGBA(1, 1, 1, 0.9f), 0, true);
-    Bar(66, 203, 186, 8, B.hp / B.maxHp, B.st == ASt::Down ? RGBA(0.5f, 0.5f, 0.5f) : RGBA(0.45f, 0.85f, 0.45f), RGBA(0.15f, 0.15f, 0.2f, 0.9f));
-
-    // 右上：ミニマップ
-    float ms = 6.6f, mx0 = W - DN * ms - 18, my0 = 14;
-    R->FillRound(mx0 - 8, my0, DN * ms + 16, DN * ms + 56, 10, RGBA(0.05f, 0.07f, 0.13f, 0.78f));
-    float myb = my0 + 8 + DN * ms;
-    for (int x = 0; x < DN; x++)
-        for (int z = 0; z < DN; z++)
-            if (seen[x][z] && cell[x][z]) R->FillRect(mx0 + x * ms, myb - (z + 1) * ms, ms, ms, RGBA(0.55f, 0.62f, 0.75f, 0.85f));
-    if (seen[exitX][exitZ - 1] || seen[exitX][exitZ])
-        R->FillRect(mx0 + exitX * ms - 1, myb - (exitZ + 1) * ms - 1, ms + 2, ms + 2, hasKey ? RGBA(1, 0.8f, 0.3f) : RGBA(0.7f, 0.4f, 1));
-    for (auto& k : pickups)
-    {
-        if (k.taken || k.k != PickKind::Crystal) continue;
-        int cx = (int)(k.pos.x / CELL), cz = (int)(k.pos.z / CELL);
-        if (seen[cx][cz]) R->FillCircle(mx0 + (k.pos.x / CELL) * ms, myb - (k.pos.z / CELL) * ms, 3, RGBA(0.5f, 0.95f, 1));
-    }
-    for (auto& ch : chests)
-    {
-        int cx = (int)(ch.pos.x / CELL), cz = (int)(ch.pos.z / CELL);
-        if (seen[cx][cz] && !ch.opened) R->FillRect(mx0 + (ch.pos.x / CELL) * ms - 2.5f, myb - (ch.pos.z / CELL) * ms - 2.5f, 5, 5, RGBA(0.95f, 0.5f, 0.3f));
-    }
-    R->FillCircle(mx0 + (B.pos.x / CELL) * ms, myb - (B.pos.z / CELL) * ms, 3, RGBA(0.8f, 0.8f, 0.85f));
-    float px = mx0 + (A.pos.x / CELL) * ms, py = myb - (A.pos.z / CELL) * ms;
-    R->FillCircle(px, py, 4.5f, RGBA(1, 0.85f, 0.3f));
-    XMFLOAT3 fd = Fwd(A.yaw);
-    R->Line(px, py, px + fd.x * 9, py - fd.z * 9, RGBA(1, 0.85f, 0.3f), 2);
-    swprintf_s(buf, L"根の洞　%d / 10", floorNo);
-    R->Text(buf, mx0, myb + 8, DN * ms, 26, 17, RGBA(1, 0.92f, 0.75f), 0, true);
-    R->Text(hasKey ? L"鍵 ✓" : L"鍵 －", mx0, myb + 10, DN * ms, 24, 15, hasKey ? RGBA(1, 0.85f, 0.4f) : RGBA(1, 1, 1, 0.6f), 2, true);
-    swprintf_s(buf, L"結晶 ×%d", crystalsThisRun);
-    R->Text(buf, mx0 - 130, my0 + 6, 120, 24, 15, RGBA(0.6f, 0.95f, 1), 2, true);
-
-    // ボスのHP
-    for (auto& e : enemies)
-    {
-        if (e.t != EType::Spider || e.st == ESt::Dead) continue;
-        float bw = 560, bx = (W - bw) / 2;
-        R->Text(L"中ボス　ほつれ蜘蛛", bx, 16, bw, 28, 20, RGBA(1, 0.9f, 0.85f), 1, true);
-        Bar(bx, 46, bw, 14, e.hp / e.maxHp, RGBA(0.85f, 0.25f, 0.3f), RGBA(0.1f, 0.08f, 0.12f, 0.85f));
-    }
-
-    // 右下：アイテム
-    const wchar_t* inames[4] = { L"薬草", L"灯油", L"研ぎ粉", L"帰り糸" };
-    D2D1_COLOR_F icol[4] = { RGBA(0.4f, 0.8f, 0.4f), RGBA(1, 0.7f, 0.3f), RGBA(0.75f, 0.8f, 0.9f), RGBA(0.9f, 0.75f, 0.4f) };
-    for (int i = 0; i < 4; i++)
-    {
-        float x = W - 4 * 78 - 14 + i * 78, y = H - 112;
-        R->FillRound(x, y, 70, 70, 10, RGBA(0.05f, 0.07f, 0.13f, 0.78f));
-        R->StrokeRound(x, y, 70, 70, 10, items[i] > 0 ? icol[i] : RGBA(1, 1, 1, 0.2f), 2);
-        R->FillCircle(x + 35, y + 30, 13, items[i] > 0 ? icol[i] : RGBA(0.3f, 0.3f, 0.3f));
-        R->Text(inames[i], x, y + 46, 70, 20, 13, RGBA(1, 1, 1, 0.9f), 1, true);
-        swprintf_s(buf, L"%d", i + 1);
-        R->Text(buf, x + 5, y + 2, 20, 20, 13, RGBA(1, 1, 1, 0.6f));
-        swprintf_s(buf, L"×%d", items[i]);
-        R->Text(buf, x + 30, y + 2, 36, 20, 14, RGBA(1, 0.95f, 0.8f), 2, true);
-    }
-
-    if (lantern < 25)
-        R->Text(lantern <= 0 ? L"灯が消えた…体力が削られていく" : L"灯が消えかけている…", 0, H - 200, W, 30, 20, RGBA(1, 0.7f, 0.4f, 0.6f + 0.4f * std::sin(time * 4)), 1, true);
-    if (!interactHint.empty() && !exitMenu)
-    {
-        R->FillRound(W / 2 - 160, H - 170, 320, 40, 20, RGBA(0.05f, 0.07f, 0.13f, 0.8f));
-        R->Text(interactHint, W / 2 - 160, H - 162, 320, 30, 18, RGBA(1, 0.92f, 0.7f), 1, true);
-    }
-
-    // 出口メニュー
-    if (exitMenu)
-    {
-        R->FillRect(0, 0, W, H, RGBA(0, 0, 0, 0.35f));
-        float bw = 520, bh = 250, bx = (W - bw) / 2, by = (H - bh) / 2 - 20;
-        R->FillRound(bx, by, bw, bh, 16, RGBA(0.06f, 0.09f, 0.17f, 0.95f));
-        R->StrokeRound(bx + 5, by + 5, bw - 10, bh - 10, 12, RGBA(0.85f, 0.6f, 0.25f), 2);
-        R->Text(L"封印が解けた", bx, by + 20, bw, 34, 26, RGBA(1, 0.9f, 0.7f), 1, true);
-        bool lockNext = (floorNo == 5 && RestoreRate() < 0.3f) || (floorNo == 9 && RestoreRate() < 0.6f);
-        std::wstring o1 = floorNo >= 10 ? L"章を終える" : L"次の階へ進む（" + std::to_wstring(floorNo + 1) + L"階）";
-        if (lockNext) o1 += floorNo == 5 ? L"　※復興率30%で解放" : L"　※復興率60%で解放";
-        swprintf_s(buf, L"村へ戻る（結晶 %d 個を持ち帰る）", crystalsThisRun);
-        std::wstring opts[2] = { o1, buf };
-        for (int i = 0; i < 2; i++)
-        {
-            float y = by + 82 + i * 64;
-            bool sel = exitSel == i;
-            R->FillRound(bx + 40, y, bw - 80, 50, 10, sel ? RGBA(0.98f, 0.94f, 0.85f) : RGBA(1, 1, 1, 0.08f));
-            R->Text(opts[i], bx + 40, y + 11, bw - 80, 30, 20, sel ? RGBA(0.12f, 0.15f, 0.25f) : RGBA(1, 1, 1, 0.9f), 1, true, !sel);
-        }
-        R->Text(L"W/S：選択　Enter：決定", bx, by + bh - 34, bw, 24, 14, RGBA(1, 1, 1, 0.6f), 1);
-    }
-
-    R->FillRect(0, H - 30, W, 30, RGBA(0.04f, 0.05f, 0.1f, 0.65f));
-    R->Text(L"WASD 移動　マウス カメラ　左クリック 攻撃（長押しで溜め）　右クリック ガード　Space 回避　Q ロックオン　E 調べる　Tab 交代　1-4 アイテム",
-            0, H - 26, W, 24, 14, RGBA(1, 1, 1, 0.8f), 1, false, false);
 }

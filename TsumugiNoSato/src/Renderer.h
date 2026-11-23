@@ -68,6 +68,7 @@ public:
     void DrawBillboard(Texture* t, XMFLOAT3 pos, float w, float h, XMFLOAT4 color, Blend b,
                        XMFLOAT4 uv = { 1, 1, 0, 0 }, float rot = 0.f, bool depthTest = true, float fog = 1.f);
     void DrawScreenOverlay(Texture* t, XMFLOAT4 color, Blend b);
+    void DrawQuadWorld(XMFLOAT3 p0, XMFLOAT3 p1, XMFLOAT3 p2, XMFLOAT3 p3, XMFLOAT4 color, Blend b, Texture* t = nullptr);
 
     // 2D（Direct2D / DirectWrite）
     void Begin2D();
@@ -82,6 +83,14 @@ public:
     void Text(const std::wstring& s, float x, float y, float w, float h, float size, D2D1_COLOR_F c,
               int align = 0, bool bold = false, bool shadow = true, int family = 0);
 
+    // サムネイル用のオフスクリーン（アトラス）：3D で描いた模型を 2D の UI に貼る
+    bool CreateAtlas(int w, int h);
+    void BeginAtlas();                                                            // 透明で消す
+    void AtlasCell(const FrameSettings& fs, float x, float y, float w, float h);  // このマスに描く準備
+    void EndAtlas();                                                              // 解決して元の描画先へ
+    void DrawAtlas(float dx, float dy, float dw, float dh, float sx, float sy, float sw, float sh, float opacity = 1.f);
+    int atlasW = 0, atlasH = 0;
+
     void Present(bool vsync);
     bool SaveScreenshot(const std::wstring& path);
     bool Project(XMFLOAT3 world, float& sx, float& sy) const;
@@ -95,6 +104,11 @@ public:
 
 private:
     void SetStates(const DrawParams& p);
+    void SetupCamera(const FrameSettings& fs, float aspect);
+    ComPtr<ID3D11Texture2D> atlasMs, atlasTex;
+    ComPtr<ID3D11RenderTargetView> atlasRTV;
+    ComPtr<ID3D11DepthStencilView> atlasDSV;
+    ComPtr<ID2D1Bitmap1> atlasBmp;
     IDWriteTextFormat* Font(float size, bool bold, int family);
 
     ComPtr<ID3D11Device> dev;
@@ -110,7 +124,7 @@ private:
     ComPtr<ID3D11VertexShader> vs, vsOutline;
     ComPtr<ID3D11PixelShader> ps, psOutline;
     ComPtr<ID3D11InputLayout> layout;
-    ComPtr<ID3D11Buffer> frameCB, objCB;
+    ComPtr<ID3D11Buffer> frameCB, objCB, dynVB, dynIB;
     ComPtr<ID3D11RasterizerState> rsBack, rsFront, rsNone;
     ComPtr<ID3D11BlendState> bsOpaque, bsAlpha, bsAdd;
     ComPtr<ID3D11DepthStencilState> dsDefault, dsNoWrite, dsOff, dsOffNoWrite;

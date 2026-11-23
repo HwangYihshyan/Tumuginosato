@@ -1,0 +1,7 @@
+# Build intermediates
+TsumugiNoSato/obj/
+*.pdb
+*.ilk
+# Local save data / test logs
+TsumugiNoSato/save.txt
+TsumugiNoSato/Screenshotsspool_test.txt

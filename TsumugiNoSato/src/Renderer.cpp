@@ -318,6 +318,17 @@ bool Renderer::Init(HWND hwnd, int w, int h, const std::wstring& shaderPath)
     cbd.Usage = D3D11_USAGE_DYNAMIC; cbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER; cbd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     cbd.ByteWidth = sizeof(FrameCB); dev->CreateBuffer(&cbd, nullptr, &frameCB);
     cbd.ByteWidth = sizeof(ObjectCB); dev->CreateBuffer(&cbd, nullptr, &objCB);
+    // 軌跡などに使う動的な四角形
+    {
+        D3D11_BUFFER_DESC vd{};
+        vd.Usage = D3D11_USAGE_DYNAMIC; vd.BindFlags = D3D11_BIND_VERTEX_BUFFER; vd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+        vd.ByteWidth = sizeof(Vertex) * 4;
+        dev->CreateBuffer(&vd, nullptr, &dynVB);
+        uint32_t ix[6] = { 0, 1, 2, 0, 2, 3 };
+        D3D11_BUFFER_DESC id{}; id.Usage = D3D11_USAGE_IMMUTABLE; id.BindFlags = D3D11_BIND_INDEX_BUFFER; id.ByteWidth = sizeof(ix);
+        D3D11_SUBRESOURCE_DATA isd{ ix, 0, 0 };
+        dev->CreateBuffer(&id, &isd, &dynIB);
+    }
 
     // ---- D2D / DWrite / WIC
     D2D1_FACTORY_OPTIONS fo{};
@@ -442,12 +453,16 @@ void Renderer::BeginFrame(const FrameSettings& fs)
     ctx->ClearDepthStencilView(dsv.Get(), D3D11_CLEAR_DEPTH, 1.f, 0);
     D3D11_VIEWPORT vp{ 0, 0, (float)W, (float)H, 0, 1 };
     ctx->RSSetViewports(1, &vp);
+    SetupCamera(fs, (float)W / H);
+}
 
+void Renderer::SetupCamera(const FrameSettings& fs, float aspect)
+{
     fovY = fs.fovY;
     camPos = fs.camPos;
     XMVECTOR eye = XMLoadFloat3(&fs.camPos), at = XMLoadFloat3(&fs.camTarget);
     view = XMMatrixLookAtLH(eye, at, XMVectorSet(0, 1, 0, 0));
-    proj = XMMatrixPerspectiveFovLH(fs.fovY, (float)W / H, fs.nearZ, fs.farZ);
+    proj = XMMatrixPerspectiveFovLH(fs.fovY, aspect, fs.nearZ, fs.farZ);
     XMMATRIX inv = XMMatrixInverse(nullptr, view);
     XMStoreFloat3(&camRight, inv.r[0]);
     XMStoreFloat3(&camUp, inv.r[1]);
@@ -556,6 +571,20 @@ void Renderer::DrawScreenOverlay(Texture* t, XMFLOAT4 color, Blend b)
     DrawBillboard(t, pos, ww, hh, color, b, { 1, 1, 0, 0 }, 0, false, 0.f);
 }
 
+void Renderer::DrawQuadWorld(XMFLOAT3 p0, XMFLOAT3 p1, XMFLOAT3 p2, XMFLOAT3 p3, XMFLOAT4 color, Blend b, Texture* t)
+{
+    D3D11_MAPPED_SUBRESOURCE ms;
+    if (FAILED(ctx->Map(dynVB.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &ms))) return;
+    Vertex* v = (Vertex*)ms.pData;
+    XMFLOAT3 n{ 0, 1, 0 };
+    v[0] = { p0, n, { 0, 0 } }; v[1] = { p1, n, { 1, 0 } }; v[2] = { p2, n, { 1, 1 } }; v[3] = { p3, n, { 0, 1 } };
+    ctx->Unmap(dynVB.Get(), 0);
+    Mesh m; m.vb = dynVB; m.ib = dynIB; m.count = 6;
+    DrawParams p;
+    p.color = color; p.blend = b; p.tex = t; p.unlit = true; p.depthWrite = false; p.cullNone = true; p.fog = 0.5f;
+    Draw(m, XMMatrixIdentity(), p);
+}
+
 bool Renderer::Project(XMFLOAT3 world, float& sx, float& sy) const
 {
     XMVECTOR p = XMVector4Transform(XMVectorSet(world.x, world.y, world.z, 1), view * proj);
@@ -643,6 +672,70 @@ void Renderer::Text(const std::wstring& s, float x, float y, float w, float h, f
     }
     brush->SetColor(c);
     d2d->DrawText(s.c_str(), (UINT32)s.size(), f, D2D1::RectF(x, y, x + w, y + h), brush.Get());
+}
+
+// ------------------------------------------------------------------
+// サムネイル用アトラス（MSAA で描いて解決し、D2D のビットマップとして UI に貼る）
+// ------------------------------------------------------------------
+bool Renderer::CreateAtlas(int w, int h)
+{
+    D3D11_TEXTURE2D_DESC td{};
+    td.Width = w; td.Height = h; td.MipLevels = 1; td.ArraySize = 1;
+    td.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    td.SampleDesc.Count = 1;
+    td.Usage = D3D11_USAGE_DEFAULT;
+    td.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+    if (FAILED(dev->CreateTexture2D(&td, nullptr, &atlasTex))) return false;
+    td.SampleDesc.Count = msaa;
+    td.BindFlags = D3D11_BIND_RENDER_TARGET;
+    if (msaa > 1) { if (FAILED(dev->CreateTexture2D(&td, nullptr, &atlasMs))) return false; }
+    if (FAILED(dev->CreateRenderTargetView(msaa > 1 ? atlasMs.Get() : atlasTex.Get(), nullptr, &atlasRTV))) return false;
+    td.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    td.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+    ComPtr<ID3D11Texture2D> depth;
+    if (FAILED(dev->CreateTexture2D(&td, nullptr, &depth))) return false;
+    if (FAILED(dev->CreateDepthStencilView(depth.Get(), nullptr, &atlasDSV))) return false;
+    ComPtr<IDXGISurface> surf;
+    if (FAILED(atlasTex.As(&surf))) return false;
+    D2D1_BITMAP_PROPERTIES1 bp = D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_NONE,
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96.f, 96.f);
+    if (FAILED(d2d->CreateBitmapFromDxgiSurface(surf.Get(), &bp, &atlasBmp))) return false;
+    atlasW = w; atlasH = h;
+    return true;
+}
+
+void Renderer::BeginAtlas()
+{
+    if (!atlasRTV) return;
+    float cc[4] = { 0, 0, 0, 0 };
+    ctx->OMSetRenderTargets(1, atlasRTV.GetAddressOf(), atlasDSV.Get());
+    ctx->ClearRenderTargetView(atlasRTV.Get(), cc);
+}
+
+void Renderer::AtlasCell(const FrameSettings& fs, float x, float y, float w, float h)
+{
+    if (!atlasRTV) return;
+    ctx->ClearDepthStencilView(atlasDSV.Get(), D3D11_CLEAR_DEPTH, 1.f, 0);
+    D3D11_VIEWPORT vp{ x, y, w, h, 0, 1 };
+    ctx->RSSetViewports(1, &vp);
+    SetupCamera(fs, w / h);
+}
+
+void Renderer::EndAtlas()
+{
+    if (!atlasRTV) return;
+    if (msaa > 1) ctx->ResolveSubresource(atlasTex.Get(), 0, atlasMs.Get(), 0, DXGI_FORMAT_B8G8R8A8_UNORM);
+    ID3D11RenderTargetView* rtv = msaa > 1 ? msaaRTV.Get() : backRTV.Get();
+    ctx->OMSetRenderTargets(1, &rtv, dsv.Get());
+    D3D11_VIEWPORT vp{ 0, 0, (float)W, (float)H, 0, 1 };
+    ctx->RSSetViewports(1, &vp);
+}
+
+void Renderer::DrawAtlas(float dx, float dy, float dw, float dh, float sx, float sy, float sw, float sh, float opacity)
+{
+    if (!atlasBmp) return;
+    D2D1_RECT_F d = D2D1::RectF(dx, dy, dx + dw, dy + dh), s = D2D1::RectF(sx, sy, sx + sw, sy + sh);
+    d2d->DrawBitmap(atlasBmp.Get(), &d, opacity, D2D1_INTERPOLATION_MODE_LINEAR, &s);
 }
 
 void Renderer::Present(bool vsync)
