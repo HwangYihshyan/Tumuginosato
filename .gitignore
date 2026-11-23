@@ -5,3 +5,9 @@ TsumugiNoSato/obj/
 # Local save data / test logs
 TsumugiNoSato/save.txt
 TsumugiNoSato/Screenshotsspool_test.txt
+
+# This repo lives in the 後期 folder: track only the project and repo files
+/*
+!/.gitignore
+!/README.md
+!/TsumugiNoSato/
