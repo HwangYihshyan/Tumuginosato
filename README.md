@@ -1,2 +1,2 @@
 # Tumuginosato
-Tumuginosato Ver. 1.0-A game inspired by Dark Cloud
+Ver. 1.0 ―『ダーククラウド』に着想を得たゲーム
