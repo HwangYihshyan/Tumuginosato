@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>ツムギノサト ― 霧海の記憶 ― 作品紹介</title>
+<style>
+  @page { size: A4 landscape; margin: 0; }
+  :root {
+    --washi: #f5efe1; --washi2: #ece3cf; --ink: #1f1a17; --ink2: #4a3f37;
+    --shu: #b3342a; --ai: #2f4c8a; --kin: #c39a55; --yama: #d99a2b; --midori: #4f8a55;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #fff; }
+  body { font-family: "Yu Gothic", "Yu Gothic UI", "Meiryo", sans-serif; color: var(--ink); font-size: 10.5pt; line-height: 1.6;
+         -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .page { width: 297mm; height: 210mm; position: relative; overflow: hidden; page-break-after: always; background: var(--washi);
+          padding: 14mm 16mm 12mm 16mm; }
+  .page:last-child { page-break-after: auto; }
+  /* 和紙の地に、赤い糸の縫い目の枠 */
+  .page::before { content: ""; position: absolute; inset: 6mm; border: 1.4px dashed rgba(179,52,42,.55); pointer-events: none; }
+  .mincho { font-family: "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", serif; }
+  h1.sec { font-family: "Yu Mincho", serif; font-size: 22pt; font-weight: 700; letter-spacing: .04em; display: flex; align-items: center; gap: 10px; }
+  h1.sec .no { display: inline-block; background: var(--shu); color: #fff8ee; font-size: 12pt; padding: 2px 10px; transform: skewX(-12deg); }
+  h1.sec .no span { display: inline-block; transform: skewX(12deg); }
+  .lead { margin-top: 2mm; color: var(--ink2); font-size: 11pt; }
+  .rule { height: 3px; width: 46mm; background: var(--shu); margin: 3mm 0 5mm; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 7mm; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5mm; }
+  .shot { width: 100%; display: block; border: 2px solid var(--ink); box-shadow: 3px 3px 0 rgba(0,0,0,.25); }
+  .cap { font-size: 8.5pt; color: var(--ink2); margin-top: 1.2mm; }
+  h3 { font-family: "Yu Mincho", serif; font-size: 13pt; margin: 0 0 1.5mm; display: flex; align-items: center; gap: 6px; }
+  h3::before { content: ""; width: 5px; height: 15px; background: var(--shu); display: inline-block; }
+  .pt { margin-bottom: 3.6mm; }
+  .pt p { font-size: 10pt; }
+  .tag { display: inline-block; font-size: 8pt; background: var(--ink); color: var(--washi); padding: 0 6px; margin: 0 3px 2px 0; }
+  .num { font-family: "Yu Mincho", serif; font-size: 26pt; font-weight: 700; color: var(--shu); line-height: 1; }
+  .numlab { font-size: 8.5pt; color: var(--ink2); }
+  .stat { background: rgba(255,255,255,.55); border-left: 4px solid var(--shu); padding: 2.5mm 3mm; }
+  table.spec { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+  table.spec th { text-align: left; width: 30mm; background: var(--ink); color: var(--washi); font-weight: 600; padding: 1.6mm 3mm; border-bottom: 1px solid var(--washi); }
+  table.spec td { padding: 1.6mm 3mm; border-bottom: 1px dashed rgba(31,26,23,.3); background: rgba(255,255,255,.45); }
+  .foot { position: absolute; bottom: 8.5mm; right: 16mm; font-size: 8pt; color: var(--ink2); font-family: "Yu Mincho", serif; }
+  .foot b { color: var(--shu); }
+  code { font-family: "Consolas", monospace; font-size: 8.8pt; background: rgba(31,26,23,.08); padding: 0 3px; }
+  .box { background: rgba(255,255,255,.5); border: 1px solid rgba(31,26,23,.25); padding: 3mm 4mm; }
+  ul.dots { list-style: none; }
+  ul.dots li { padding-left: 14px; position: relative; margin-bottom: 1.2mm; font-size: 9.8pt; }
+  ul.dots li::before { content: ""; position: absolute; left: 0; top: .62em; width: 6px; height: 6px; background: var(--shu); transform: rotate(45deg); }
+
+  /* ---- 表紙 ---- */
+  .cover { padding: 0; background: #1b1716; color: var(--washi); }
+  .cover::before { border-color: rgba(195,154,85,.5); z-index: 3; }
+  .cover .bg { position: absolute; inset: 0; background: url("images/02_dash_to_entrance.jpg") center/cover; opacity: .55; }
+  .cover .shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(20,16,15,.95) 0%, rgba(20,16,15,.82) 45%, rgba(20,16,15,.15) 100%); }
+  .cover .inner { position: relative; z-index: 2; padding: 26mm 22mm; height: 100%; display: flex; flex-direction: column; }
+  .seal { width: 22mm; height: 22mm; background: var(--shu); color: #fff6ea; display: flex; align-items: center; justify-content: center;
+          font-family: "Yu Mincho", serif; font-size: 30pt; font-weight: 700; outline: 1.5px solid rgba(255,240,220,.8); outline-offset: -2.5mm; }
+  .cover .kicker { margin-top: 8mm; font-size: 10pt; letter-spacing: .35em; color: var(--kin); }
+  .cover .title { font-family: "Yu Mincho", serif; font-size: 50pt; font-weight: 700; letter-spacing: .12em; line-height: 1.15; margin-top: 2mm; }
+  .cover .sub { font-family: "Yu Mincho", serif; font-size: 20pt; letter-spacing: .2em; color: #efe2c8; margin-top: 1mm; }
+  .cover .line { height: 3px; width: 70mm; background: var(--shu); margin: 6mm 0 5mm; }
+  .cover .genre { font-size: 12pt; letter-spacing: .08em; }
+  .cover .tech { margin-top: 3mm; }
+  .cover .tech span { display: inline-block; border: 1px solid var(--kin); color: var(--kin); font-size: 9pt; padding: 1px 8px; margin-right: 6px; }
+  .cover .who { margin-top: auto; width: 120mm; font-size: 10.5pt; }
+  .cover .who div { display: flex; border-bottom: 1px solid rgba(239,226,200,.55); padding: 2.2mm 0; }
+  .cover .who div span:first-child { width: 28mm; color: var(--kin); font-family: "Yu Mincho", serif; }
+
+  /* ---- 流れの図 ---- */
+  .loop { display: flex; align-items: stretch; gap: 0; margin-top: 2mm; }
+  .loop .step { flex: 1; background: rgba(255,255,255,.6); border: 1.5px solid var(--ink); padding: 2.5mm 3mm; position: relative; }
+  .loop .step b { font-family: "Yu Mincho", serif; font-size: 11pt; display: block; }
+  .loop .step small { font-size: 8.5pt; color: var(--ink2); line-height: 1.45; display: block; margin-top: 1mm; }
+  .loop .arr { width: 7mm; display: flex; align-items: center; justify-content: center; color: var(--shu); font-size: 15pt; font-weight: 700; }
+  .loop .step.d { border-color: var(--ai); } .loop .step.v { border-color: var(--midori); }
+  .loop .step .k { position: absolute; top: -2.6mm; left: 2mm; font-size: 7.5pt; color: #fff; padding: 0 5px; }
+  .loop .step.d .k { background: var(--ai); } .loop .step.v .k { background: var(--midori); }
+
+  /* ---- 描画の流れ ---- */
+  .pipe { display: flex; gap: 0; align-items: stretch; margin: 2mm 0 4mm; }
+  .pipe div { flex: 1; text-align: center; background: var(--ink); color: var(--washi); font-size: 8.6pt; padding: 2mm 1.5mm; line-height: 1.4;
+              clip-path: polygon(0 0, 92% 0, 100% 50%, 92% 100%, 0 100%, 8% 50%); margin-right: -2.5mm; }
+  .pipe div:first-child { clip-path: polygon(0 0, 92% 0, 100% 50%, 92% 100%, 0 100%); }
+  .pipe div b { display: block; color: var(--kin); font-size: 9.5pt; }
+  .pipe div.hi { background: var(--shu); } .pipe div.hi b { color: #fff3e0; }
+
+  .role { width: 100%; border-collapse: collapse; }
+  .role th, .role td { padding: 2.4mm 3mm; border-bottom: 1px dashed rgba(31,26,23,.3); font-size: 10pt; text-align: left; vertical-align: top; }
+  .role th { width: 38mm; font-family: "Yu Mincho", serif; }
+  .role td.who { width: 18mm; font-weight: 700; }
+  .me { color: var(--shu); } .ai { color: var(--ai); }
+</style>
+</head>
+<body>
+
+<!-- ================= 1. 表紙 ================= -->
+<section class="page cover">
+  <div class="bg"></div><div class="shade"></div>
+  <div class="inner">
+    <div class="seal">紡</div>
+    <div class="kicker">GAME PORTFOLIO</div>
+    <div class="title">ツムギノサト</div>
+    <div class="sub">― 霧海の記憶 ―</div>
+    <div class="line"></div>
+    <div class="genre">ダンジョン探索 × 町の復興　アクション RPG（第1章 垂直スライス）</div>
+    <div class="tech"><span>C++17</span><span>DirectX 11</span><span>HLSL</span><span>Direct2D / DirectWrite</span><span>ゲームエンジン不使用</span></div>
+    <div class="who">
+      <div><span>制作期間</span><span>約2ヶ月</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 2. 作品概要 ================= -->
+<section class="page">
+  <h1 class="sec"><span class="no"><span>概要</span></span>糸で、霧に呑まれた村を紡ぎなおす</h1>
+  <div class="rule"></div>
+  <div class="grid2" style="grid-template-columns: 1.08fr 1fr;">
+    <div>
+      <p style="font-size:10.5pt;">
+        霧に呑まれ、思い出ごと消えかけた機織りの村「ハタオリ村」。主人公ソラと糸の妖精ツムギは、地下の迷宮「根の洞」に潜り、
+        糸巻きの形になって散らばった村のかけら（ジオラマパーツ）を集めて持ち帰ります。
+        持ち帰ったジオラマを村に置き、小さなパーツをはめ込んで建物を完成させると、店や鍛冶屋が開き、仲間が加わり、もっと深い階へ挑めるようになります。
+      </p>
+      <h3 style="margin-top:4mm;">ゲームの流れ</h3>
+      <div class="loop">
+        <div class="step d"><span class="k">根の洞</span><b>潜る</b><small>全15階。戦って、糸巻きを開ける</small></div>
+        <div class="arr">›</div>
+        <div class="step d"><span class="k">根の洞</span><b>持ち帰る</b><small>各階10個の糸巻きからジオラマパーツ</small></div>
+        <div class="arr">›</div>
+        <div class="step v"><span class="k">村</span><b>置く・はめる</b><small>マスに置き、枠にパーツをはめ込む</small></div>
+        <div class="arr">›</div>
+        <div class="step v"><span class="k">村</span><b>よみがえる</b><small>機能・仲間・イベントが解放され、次の階へ</small></div>
+      </div>
+      <h3 style="margin-top:5mm;">作品データ</h3>
+      <table class="spec">
+        <tr><th>ジャンル</th><td>3D アクション RPG（ダンジョン探索 × 箱庭づくり）</td></tr>
+        <tr><th>開発環境</th><td>C++17 / DirectX 11 / HLSL（Shader Model 5.0）/ Direct2D・DirectWrite・WIC / MSVC</td></tr>
+        <tr><th>規模</th><td>ソースコード 約 12,500 行（C++ 22 ファイル ＋ HLSL）。ゲームエンジン・外部ライブラリは不使用</td></tr>
+        <tr><th>内容</th><td>ダンジョン全15階・操作キャラ3人・敵8種（うちボス2体）・ジオラマパーツ121個・会話イベント多数</td></tr>
+        <tr><th>動作環境</th><td>Windows 10 / 11、DirectX 11 対応 GPU、1280×720</td></tr>
+      </table>
+    </div>
+    <div>
+      <img class="shot" src="images/12_combat_sora.jpg">
+      <div class="cap">根の洞での戦闘。左上はキャラクターの状態、右上は地図</div>
+      <img class="shot" src="images/26b_full_village_placement.jpg" style="margin-top:3mm;">
+      <div class="cap">ハタオリ村。集めたジオラマを並べて村を復興させる</div>
+    </div>
+  </div>
+  <div class="foot">ツムギノサト ― 霧海の記憶 ―　<b>2</b></div>
+</section>
+
+<!-- ================= 3. 自作エンジン ================= -->
+<section class="page">
+  <h1 class="sec"><span class="no"><span>POINT 1</span></span>ゲームエンジンを使わず、描画から作り上げた</h1>
+  <p class="lead">Unity や Unreal を使わず、DirectX 11 の上に描画・入力・UI・ゲームの仕組みをすべて自分で組み立てました。</p>
+  <div class="rule"></div>
+  <div class="pipe">
+    <div><b>入力</b>キー・マウス<br>Raw Input</div>
+    <div><b>更新</b>場面ごとに<br>Update を切替</div>
+    <div class="hi"><b>3D 描画</b>トゥーン＋輪郭線<br>点光源16・MSAA</div>
+    <div><b>エフェクト</b>ビルボード<br>連番テクスチャ</div>
+    <div class="hi"><b>2D UI</b>Direct2D<br>DirectWrite</div>
+    <div><b>表示</b>スワップチェーン<br>Present</div>
+  </div>
+  <div class="grid2">
+    <div>
+      <div class="pt"><h3>形は「基本図形 ＋ 手続き生成」</h3>
+        <p>球・円柱・円錐などの基本図形をコードで生成し、行列で組み合わせてキャラクターや建物を描いています。主人公の武器「大糸切り鋏」の刃は、刃の幅・厚み・刃先の反りを関数で決めてメッシュを手続き生成しました。</p></div>
+      <div class="pt"><h3>3D と 2D を一枚の絵に</h3>
+        <p>3D を MSAA で描いて解決したあと、同じバックバッファに Direct2D で UI と日本語の文字を重ねています。配置メニューのサムネイルは、部品の3D模型をオフスクリーンのアトラスに一度だけ描き、2D の UI に貼る仕組みです。</p></div>
+      <div class="pt"><h3>光とライトの管理</h3>
+        <p>宝箱・泉・灯などの点光源は毎フレーム集め、カメラの注視点に近い順に16個までをシェーダへ渡します。灯（ランタン）の残量でフォグの距離と自分の明かりが変わり、探索の緊張感につながっています。</p></div>
+    </div>
+    <div>
+      <div class="pt"><h3>自動撮影による動作確認</h3>
+        <p><code>--autoshot</code> で起動すると、台本どおりにゲームを自動で進め、約90場面のスクリーンショットと確認ログを書き出します。村づくり・15階の攻略・QTE・メニュー操作までを毎回同じ条件で確かめられるため、修正による不具合（デグレード）にすぐ気づけます。</p></div>
+      <img class="shot" src="images/32_weapon_design.jpg">
+      <div class="cap">自動撮影で書き出した武器の設定画（実際のゲーム内の描画）</div>
+    </div>
+  </div>
+  <div class="foot">ツムギノサト ― 霧海の記憶 ―　<b>3</b></div>
+</section>
+
+<!-- ================= 4. シェーディング ================= -->
+<section class="page">
+  <h1 class="sec"><span class="no"><span>POINT 2</span></span>アニメ調のトゥーンシェーディング</h1>
+  <p class="lead">HLSL で自作したシェーダー1本で、絵本のような柔らかさと、くっきりしたアニメの塗りを両立させました。</p>
+  <div class="rule"></div>
+  <div class="grid2" style="grid-template-columns: 1fr 1.05fr;">
+    <div>
+      <div class="pt"><h3>3段階の陰影 ＋ 影の色</h3>
+        <p>光の当たり具合を <code>smoothstep</code> でほぼ段差にし、「影・中間・明るい」の3段に分けています。影はただ暗くするのではなく、場面ごとに決めた色（洞は青紫、村は霧の青から夕焼けの紫へ）に寄せ、アニメの塗りらしさを出しました。</p></div>
+      <div class="pt"><h3>背面法の輪郭線</h3>
+        <p>裏面だけをもう一度、法線方向にふくらませて描き、墨のような輪郭線にしています。カメラから遠いほど少し太くして画面上の太さをそろえ、霧の中でも線が消えすぎないよう調整しました。</p></div>
+      <div class="pt"><h3>法線のゆがみの修正</h3>
+        <p>キャラクターは縦横の倍率が違う球を多く使うため、法線を world 行列で変換すると影の境目がずれます。逆転置行列で変換するよう直し、どの形でも陰影が正しく出るようにしました。</p></div>
+      <div class="pt"><h3>金属のハイライトとリムライト</h3>
+        <p>ハーフベクトルを使ったハイライトを <code>smoothstep</code> で「くっきりした光の点」にし、鋏の刃や針だけに乗せています。輪郭のリムライト・点光源・高さのある霧と合わせて、暗い洞でも形が読み取れます。</p></div>
+    </div>
+    <div>
+      <img class="shot" src="images/31_fire_scissors.jpg">
+      <div class="cap">深い階（青紫の影）。緋色の鋏の刃に光の点、敵や仲間に輪郭線</div>
+      <div class="grid2" style="gap:3mm; margin-top:3mm;">
+        <div><img class="shot" src="images/36_motion_spin.jpg"><div class="cap">溜め回転のモーション表</div></div>
+        <div><img class="shot" src="images/23b_shop_interior_open.jpg"><div class="cap">室内は暖かい赤茶の影</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">ツムギノサト ― 霧海の記憶 ―　<b>4</b></div>
+</section>
+
+<!-- ================= 5. ゲームシステム ================= -->
+<section class="page">
+  <h1 class="sec"><span class="no"><span>POINT 3</span></span>遊びの幅を広げるアクションとダンジョン</h1>
+  <p class="lead">3人の仲間はそれぞれ「攻撃・右クリックの技・回避」がまったく違い、階ごとに戦い方が変わるよう設計しました。</p>
+  <div class="rule"></div>
+  <div class="grid3" style="margin-bottom:4mm;">
+    <div class="stat"><div class="num">15<span style="font-size:12pt;">階</span></div><div class="numlab">深い階ほど新しい敵が混ざる。3・7・14階は操作キャラ固定</div></div>
+    <div class="stat"><div class="num">3<span style="font-size:12pt;">人</span></div><div class="numlab">ソラ（近接）・クロベエ（範囲と防御）・カイリ（遠距離）を Tab で交代</div></div>
+    <div class="stat"><div class="num">8<span style="font-size:12pt;">種</span></div><div class="numlab">正面の攻撃を受け流す鎧武者など行動の違う敵6種と、ボス2体（ほつれ蜘蛛・うつろ）</div></div>
+  </div>
+  <div class="grid2" style="grid-template-columns: 1.05fr 1fr;">
+    <div>
+      <div class="pt"><h3>キャラクターごとの手ざわり</h3>
+        <p><b>ソラ</b>：巨大な糸切り鋏で「開く→挟む→振り抜く」3段コンボと、刃を開いて回る溜め攻撃。<b>クロベエ</b>：ひも通しを扇形に薙ぎ払い、紐を回して飛び道具を防ぎ、地面に潜って回避。<b>カイリ</b>：ミシン針を投げ、溜めると敵を貫く大針。</p></div>
+      <div class="pt"><h3>15階のボス「うつろ」：地形を使う戦い</h3>
+        <p>4本の糸の柱が残っているあいだ攻撃が効きません。柱は攻撃でも壊せますが、うつろの突進を柱の前へ誘い込んでぶつけさせると柱が砕け、うつろが目を回します。18秒たつか体力が1/4減ると柱が紡ぎなおされるため、攻めどきを見極める駆け引きが生まれます。</p></div>
+      <div class="pt"><h3>12階の QTE</h3>
+        <p>回避・連打・ツムギの糸での縫い留め・とどめの4つの合図。刺繍枠の縫い目がほどけていく表示で残り時間を伝えます。</p></div>
+    </div>
+    <div>
+      <img class="shot" src="images/19b_utsuro_stunned_pillar_broken.jpg">
+      <div class="cap">突進を柱にぶつけて守りを崩したうつろ（上はボスの体力と守りの状態）</div>
+      <div class="grid2" style="gap:3mm; margin-top:3mm;">
+        <div><img class="shot" src="images/26b_kurobee_fan_sweep.jpg"><div class="cap">クロベエの扇形の薙ぎ払い</div></div>
+        <div><img class="shot" src="images/17b_qte_mash.jpg"><div class="cap">QTE（連打の合図）</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">ツムギノサト ― 霧海の記憶 ―　<b>5</b></div>
+</section>
+
+<!-- ================= 6. 村づくり ================= -->
+<section class="page">
+  <h1 class="sec"><span class="no"><span>POINT 4</span></span>集めたものが形になる、ジオラマの村づくり</h1>
+  <p class="lead">ダンジョンの成果が「目に見える村の変化」として返ってくることで、もう一度潜りたくなる循環を作りました。</p>
+  <div class="rule"></div>
+  <div class="grid2" style="grid-template-columns: 1fr 1.05fr;">
+    <div>
+      <div class="pt"><h3>置く ― 地形のルールがあるパズル</h3>
+        <p>20×20 マスの村に建物・道・木を置きます。水車と橋は川の上だけ、井戸は川から2マス以内。橋をかけると向こう岸へ渡れて、そこにも置けるようになります。並べた川は水がつながり、橋を並べると幅広の1本の橋になります。</p></div>
+      <div class="pt"><h3>はめる ― 枠の形でわかるはめ込み</h3>
+        <p>建物には「はめ込み枠」があり、暖簾・看板・住人などのパーツを、灰色の影絵で示した同じ形の枠へ運んではめます。人物をはめるとその人が住人として町を歩きはじめます。</p></div>
+      <div class="pt"><h3>話す ― 住人が村づくりを手伝う</h3>
+        <p>住人との会話は「物語・ジオラマ・村・コツ」の話題から選びます。はめ込みの解放、足りないパーツの手がかり、復興率の上昇につながり、会話そのものが進行の手段になっています。</p></div>
+      <div class="pt"><h3>完成 ― 機能と仲間の解放</h3>
+        <p>枠が全部うまった建物のそばへ行くとイベントが起き、店・鍛冶屋・機織り小屋が使えるようになり、炭焼き窯ではクロベエ、水車ではカイリが仲間に加わります。</p></div>
+    </div>
+    <div>
+      <img class="shot" src="images/21_carry_person_to_card.jpg">
+      <div class="cap">配置／組み立てメニュー。右の欄のパーツを、左のカードの同じ形の枠へ運ぶ</div>
+      <div class="grid2" style="gap:3mm; margin-top:3mm;">
+        <div><img class="shot" src="images/20d_placed_border_river_bridge.jpg"><div class="cap">川と橋、石垣で囲んだ村の範囲</div></div>
+        <div><img class="shot" src="images/24_kurobee_joins_after_event.jpg"><div class="cap">炭焼き窯の完成イベント</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">ツムギノサト ― 霧海の記憶 ―　<b>6</b></div>
+</section>
+
+<!-- ================= 7. UI デザイン ================= -->
+<section class="page">
+  <h1 class="sec"><span class="no"><span>POINT 5</span></span>世界観から作った「和紙と墨と糸」の UI</h1>
+  <p class="lead">よくある四角いパネルではなく、機織りの村という題材から形と色を決め、すべての画面で同じ部品を使いました。</p>
+  <div class="rule"></div>
+  <div class="grid2" style="grid-template-columns: 1fr 1.1fr;">
+    <div>
+      <div class="pt"><h3>共通の部品で統一感を出す</h3>
+        <p>墨の板・和紙の札・朱のタブ・斜めのゲージといった UI の部品を関数にまとめ、色は「墨・和紙・朱・金」の4つに絞りました。部品を変えれば全画面に反映されます。角を斜めに切った形や縫い目の点線は、Direct2D のパスを使って描いています。</p></div>
+      <div class="pt"><h3>糸のモチーフを情報の表現に</h3>
+        <ul class="dots">
+          <li><b>会話</b>：和紙の札を赤い糸で縫った枠。「次へ」は糸のついた針</li>
+          <li><b>復興率</b>：織りかけの反物。復興が進むほど布が織りあがる</li>
+          <li><b>お金</b>：赤い紐に通した穴あき銭（銭差し）</li>
+          <li><b>村のメニュー</b>：縦糸に通した糸巻きが項目。選ぶと糸が巻物へつながる</li>
+          <li><b>QTE の残り時間</b>：刺繍枠の縫い目がほどけていく</li>
+        </ul></div>
+      <div class="pt"><h3>戦闘中は読みやすさを優先</h3>
+        <p>ダンジョンの HUD は大きな顔と斜めのゲージのアニメ調にし、受けたダメージを白い帯が遅れて追いかける表現で伝えます。ボスの体力や柱のゲージは、ほかの表示と重ならない位置に自動で収めています。</p></div>
+    </div>
+    <div>
+      <img class="shot" src="images/25b_town_menu.jpg">
+      <div class="cap">村のメニュー（糸巻きの項目と巻物）</div>
+      <div class="grid2" style="gap:3mm; margin-top:3mm;">
+        <div><img class="shot" src="images/14_floor2_nagi.jpg"><div class="cap">会話の囲い（和紙と縫い目）</div></div>
+        <div><img class="shot" src="images/22_unlock_by_talk.jpg"><div class="cap">村の HUD（判・反物・銭）</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">ツムギノサト ― 霧海の記憶 ―　<b>7</b></div>
+</section>
+
+<!-- ================= 8. 制作体制・まとめ ================= -->
+<section class="page">
+  <h1 class="sec"><span class="no"><span>制作</span></span>担当範囲と、この作品で身につけたこと</h1>
+  <div class="rule"></div>
+  <div class="grid2" style="grid-template-columns: 1fr 1fr;">
+    <div>
+      <h3>担当範囲</h3>
+      <table class="role">
+        <tr><th>企画・ゲームデザイン</th><td class="who me">本人</td><td>世界観・ゲームの流れ・階の構成・村づくりのルール</td></tr>
+        <tr><th>プログラム全般</th><td class="who me">本人</td><td>描画・入力・戦闘・敵 AI・ダンジョン生成・村・会話・セーブ</td></tr>
+        <tr><th>シェーダー</th><td class="who me">本人</td><td>トゥーンシェーディング・輪郭線・ハイライト・霧（HLSL）</td></tr>
+        <tr><th>UI デザイン・実装</th><td class="who me">本人</td><td>和紙と墨の UI 部品・HUD・メニュー・QTE 表示</td></tr>
+        <tr><th>3D モデル</th><td class="who ai">生成 AI</td><td>キャラクター・建物などの造形</td></tr>
+        <tr><th>テクスチャ</th><td class="who ai">生成 AI</td><td>地面・壁・木材・布などの質感</td></tr>
+      </table>
+      <div class="box" style="margin-top:5mm;">
+        <h3>操作（ダンジョン）</h3>
+        <p style="font-size:9.3pt;">WASD 移動 ／ Shift ダッシュ ／ 左クリック 攻撃 ／ 右クリック 技 ／ Space 回避 ／ Q ロックオン ／ E 調べる ／ Tab 仲間と交代 ／ Esc メニュー</p>
+      </div>
+    </div>
+    <div>
+      <div class="pt"><h3>エンジンの中で何が起きているかを理解した</h3>
+        <p>定数バッファの並び（16 バイト境界）、行列の行優先・列優先、法線の変換、深度とブレンドの状態管理など、エンジンが隠している部分を自分で書いたことで、描画の問題を原因から説明して直せるようになりました。</p></div>
+      <div class="pt"><h3>遊びと見た目を、題材から一貫させる</h3>
+        <p>「糸で村を紡ぎなおす」という題材を、ゲームの仕組み（糸巻き・はめ込み）、ボス戦（糸の柱）、UI（縫い目・反物・刺繍枠）まで通しました。コンセプトから逆算して設計する考え方を身につけました。</p></div>
+      <div class="pt"><h3>確かめられる作り方</h3>
+        <p>自動撮影の台本で、約90場面とログを毎回同じ条件で出力し、修正のたびに見比べて不具合を早く見つけました。</p></div>
+      <div class="pt"><h3>今後の展望</h3>
+        <ul class="dots">
+          <li>シャドウマップによる落ち影と、ブルームなどのポストエフェクト</li>
+          <li>物語の続き：ゲーム内で示した「霧の向こうの海」にある村と、新しい仲間</li>
+        </ul></div>
+    </div>
+  </div>
+  <div class="foot">ツムギノサト ― 霧海の記憶 ―　<b>8</b></div>
+</section>
+
+<script>
+  // 確認用：URL の末尾に #p3 などをつけると、そのページだけを表示する（印刷・PDF には影響しない）
+  (function () {
+    var m = location.hash.match(/^#p(\d+)$/);
+    if (!m) return;
+    var pages = document.querySelectorAll('.page');
+    pages.forEach(function (p, i) { if (i !== +m[1] - 1) p.style.display = 'none'; });
+    document.body.style.margin = '0';
+  })();
+</script>
+</body>
+</html>
