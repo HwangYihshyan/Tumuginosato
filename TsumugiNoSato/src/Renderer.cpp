@@ -9,18 +9,23 @@
 
 namespace
 {
-    struct FrameCB
+    // 定数バッファ（GPU へ送る値のかたまり）。Toon.hlsl の cbuffer と「同じ順番・同じ大きさ」にすること。
+    // GPU は 16 バイト（float 4つ）単位で読むので、XMFLOAT4 / XMFLOAT4X4 / int[4] だけで並べてずれを防いでいる。
+    // 値を足すときは、両方のファイルの同じ場所に足す（片方だけだと、それより後ろの値が全部ずれる）
+    struct FrameCB                // フレームに1回（BeginFrame → SetupCamera）
     {
         XMFLOAT4X4 view, proj;
         XMFLOAT4 camPos, lightDir, lightColor, ambient, fogColor, fogParams, time;
         XMFLOAT4 plPos[16];
         XMFLOAT4 plCol[16];
         int plCount[4];
+        XMFLOAT4 shadowColor;     // 影の色（シェーダの gShadowColor）。FrameSettings.shadowColor から入れる
     };
-    struct ObjectCB
+    struct ObjectCB               // Draw 1回ごと
     {
         XMFLOAT4X4 world;
-        XMFLOAT4 color, uv, emissive, flags, flags2;
+        XMFLOAT4X4 worldIT;       // 法線用（シェーダの gWorldIT）。Draw の中で world から計算する
+        XMFLOAT4 color, uv, emissive, flags, flags2;   // flags2.w = DrawParams.spec（ハイライトの強さ）
     };
 
     void Log(const char* s) { OutputDebugStringA(s); OutputDebugStringA("\n"); }
@@ -342,6 +347,14 @@ bool Renderer::Init(HWND hwnd, int w, int h, const std::wstring& shaderPath)
     d2d->SetTarget(d2dTarget.Get());
     d2d->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
     d2d->CreateSolidColorBrush(D2D1::ColorF(1, 1, 1, 1), &brush);
+    {
+        // 縫い目の点線（StrokePoly の dashed・DashedLine で使う）。起動時に1回だけ作って使い回す。
+        // 長さは「線の太さ」が単位：太さ 1.5 なら「4.5 描いて 3.3 あける」。端を丸くして糸の目らしく見せる
+        float dashes[2] = { 3.f, 2.2f };
+        D2D1_STROKE_STYLE_PROPERTIES sp = D2D1::StrokeStyleProperties(D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND,
+            D2D1_LINE_JOIN_ROUND, 10.f, D2D1_DASH_STYLE_CUSTOM, 0.f);
+        d2dFactory->CreateStrokeStyle(sp, dashes, 2, &stitchStyle);
+    }
     DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), (IUnknown**)dwrite.GetAddressOf());
     CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&wic));
 
@@ -493,6 +506,7 @@ void Renderer::SetupCamera(const FrameSettings& fs, float aspect)
         cb.plCol[i] = { ls[i].color.x, ls[i].color.y, ls[i].color.z, 1 };
     }
     cb.plCount[0] = n;
+    cb.shadowColor = { fs.shadowColor.x, fs.shadowColor.y, fs.shadowColor.z, 1 };
     D3D11_MAPPED_SUBRESOURCE ms;
     ctx->Map(frameCB.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &ms);
     memcpy(ms.pData, &cb, sizeof(cb));
@@ -523,11 +537,21 @@ void Renderer::Draw(const Mesh& m, const XMMATRIX& world, const DrawParams& p)
     if (!m.vb) return;
     ObjectCB cb{};
     XMStoreFloat4x4(&cb.world, XMMatrixTranspose(world));
+    // 法線は world の逆転置で変換する（理由は Toon.hlsl の VSMain に書いた）。
+    // DirectXMath とシェーダでは行列の並び（行優先／列優先）が逆なので、world は転置して送っている。
+    // 逆転置 = transpose(inverse(world)) を同じように転置して送ると transpose(transpose(inverse)) = inverse。
+    // つまり「逆行列をそのまま送る」だけで、シェーダ側では逆転置として働く
+    XMVECTOR det;
+    XMMATRIX inv = XMMatrixInverse(&det, world);
+    // 大きさ 0 に縮んだもの（倒した敵が消える途中など）は逆行列が作れない（行列式 det が 0）。
+    // そのときは world をそのまま使う（前の方法と同じ。つぶれて見えないので、法線が少しずれても困らない）
+    if (std::fabs(XMVectorGetX(det)) < 1e-12f) inv = XMMatrixTranspose(world);
+    XMStoreFloat4x4(&cb.worldIT, inv);
     cb.color = p.color;
     cb.uv = p.uv;
     cb.emissive = { p.emissive.x, p.emissive.y, p.emissive.z, 0 };
     cb.flags = { p.tex ? 1.f : 0.f, p.unlit ? 1.f : 0.f, p.alphaClip ? 1.f : 0.f, p.outline };
-    cb.flags2 = { p.rim, p.worldUV ? 1.f : 0.f, p.fog, 0 };
+    cb.flags2 = { p.rim, p.worldUV ? 1.f : 0.f, p.fog, p.spec };
     D3D11_MAPPED_SUBRESOURCE ms;
     ctx->Map(objCB.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &ms);
     memcpy(ms.pData, &cb, sizeof(cb));
@@ -647,6 +671,60 @@ void Renderer::Line(float x0, float y0, float x1, float y1, D2D1_COLOR_F c, floa
     d2d->DrawLine(D2D1::Point2F(x0, y0), D2D1::Point2F(x1, y1), brush.Get(), width);
 }
 
+// ------------------------------------------------------------------
+// 2D の多角形・点線・グラデーション（和紙と墨の UI で使う）
+//   D2D には「四角」「角丸」「円」の描画はあるが、角を斜めに切った板や平行四辺形はないので、
+//   点を順につないだ「パス（PathGeometry）」を作って塗る／縁取る
+// ------------------------------------------------------------------
+
+// 点の並び pts[0..n-1] を順につなぎ、最後の点から最初の点へ閉じた形を作る。
+// 呼ぶたびに作るが、UI の数（1フレームに数十個）ならじゅうぶん速い
+ComPtr<ID2D1PathGeometry> Renderer::MakePoly(const D2D1_POINT_2F* pts, int n)
+{
+    ComPtr<ID2D1PathGeometry> g;
+    if (n < 2 || FAILED(d2dFactory->CreatePathGeometry(&g))) return nullptr;
+    ComPtr<ID2D1GeometrySink> sink;
+    if (FAILED(g->Open(&sink))) return nullptr;
+    sink->BeginFigure(pts[0], D2D1_FIGURE_BEGIN_FILLED);
+    sink->AddLines(pts + 1, (UINT32)(n - 1));
+    sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+    sink->Close();
+    return g;
+}
+// 多角形を塗る（墨の板・和紙の札・名札の帯など）
+void Renderer::FillPoly(const D2D1_POINT_2F* pts, int n, D2D1_COLOR_F c)
+{
+    auto g = MakePoly(pts, n);
+    if (!g) return;
+    brush->SetColor(c);
+    d2d->FillGeometry(g.Get(), brush.Get());
+}
+// 多角形の縁を描く。dashed = true なら縫い目の点線（会話の枠の赤い糸など）
+void Renderer::StrokePoly(const D2D1_POINT_2F* pts, int n, D2D1_COLOR_F c, float width, bool dashed)
+{
+    auto g = MakePoly(pts, n);
+    if (!g) return;
+    brush->SetColor(c);
+    d2d->DrawGeometry(g.Get(), brush.Get(), width, dashed ? stitchStyle.Get() : nullptr);
+}
+// 縫い目の点線（帯の下の糸、行の区切り、巻物の縁など）
+void Renderer::DashedLine(float x0, float y0, float x1, float y1, D2D1_COLOR_F c, float width)
+{
+    brush->SetColor(c);
+    d2d->DrawLine(D2D1::Point2F(x0, y0), D2D1::Point2F(x1, y1), brush.Get(), width, stitchStyle.Get());
+}
+// 左の色 → 右の色へ変わる四角。HUD の「左から暗くなる」下地や、和紙のつやに使う。
+// 右の色の透明度を 0 にすると、板の形を見せずに文字の後ろだけ暗くできる
+void Renderer::FillGradientRect(float x, float y, float w, float h, D2D1_COLOR_F left, D2D1_COLOR_F right)
+{
+    D2D1_GRADIENT_STOP st[2] = { { 0.f, left }, { 1.f, right } };
+    ComPtr<ID2D1GradientStopCollection> col;
+    if (FAILED(d2d->CreateGradientStopCollection(st, 2, &col))) return;
+    ComPtr<ID2D1LinearGradientBrush> gb;
+    if (FAILED(d2d->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(D2D1::Point2F(x, y), D2D1::Point2F(x + w, y)), col.Get(), &gb))) return;
+    d2d->FillRectangle(D2D1::RectF(x, y, x + w, y + h), gb.Get());
+}
+
 IDWriteTextFormat* Renderer::Font(float size, bool bold, int family)
 {
     int key = (int)(size * 10) + (bold ? 100000 : 0) + family * 1000000;
@@ -741,6 +819,24 @@ void Renderer::DrawAtlas(float dx, float dy, float dw, float dh, float sx, float
 void Renderer::Present(bool vsync)
 {
     swap->Present(vsync ? 1 : 0, 0);
+}
+
+bool Renderer::CaptureFrame(std::vector<uint8_t>& out, int& pitch)
+{
+    D3D11_TEXTURE2D_DESC d; backBuf->GetDesc(&d);
+    if (!captureStaging)
+    {
+        d.Usage = D3D11_USAGE_STAGING; d.BindFlags = 0; d.CPUAccessFlags = D3D11_CPU_ACCESS_READ; d.MiscFlags = 0;
+        if (FAILED(dev->CreateTexture2D(&d, nullptr, &captureStaging))) return false;
+    }
+    ctx->CopyResource(captureStaging.Get(), backBuf.Get());
+    D3D11_MAPPED_SUBRESOURCE ms;
+    if (FAILED(ctx->Map(captureStaging.Get(), 0, D3D11_MAP_READ, 0, &ms))) return false;
+    pitch = (int)d.Width * 4;
+    out.resize((size_t)pitch * d.Height);
+    for (UINT y = 0; y < d.Height; y++) memcpy(&out[(size_t)y * pitch], (uint8_t*)ms.pData + y * ms.RowPitch, pitch);
+    ctx->Unmap(captureStaging.Get(), 0);
+    return true;
 }
 
 bool Renderer::SaveScreenshot(const std::wstring& path)

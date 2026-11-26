@@ -98,7 +98,8 @@ bool Game::Init(Renderer* r, const std::wstring& assetDir)
     if (!autoshot) LoadSettings();   // タイトルの「設定」で変えた内容
     scene = SceneId::Title;
     sceneT = 0;
-    if (autoshot) BuildShotScript();
+    if (movie) BuildMovieScript();
+    else if (autoshot) BuildShotScript();
     return true;
 }
 
@@ -172,6 +173,11 @@ void Game::Update(float dt, InputState& realIn)
     time += dt;
     sceneT += dt;
     if (autoshot) UpdateDirector(dt);
+    if (movie)
+    {
+        movieCardT += dt; movieCapT += dt;
+        if (movieTick) movieTick(dt);
+    }
 
     for (auto& t : toasts) t.t += dt;
     toasts.erase(std::remove_if(toasts.begin(), toasts.end(), [](const Toast& t) { return t.t > 3.4f; }), toasts.end());
@@ -294,8 +300,7 @@ void Game::DrawSettings()
     float W = (float)R->W, H = (float)R->H;
     R->FillRect(0, 0, W, H, RGBA(0.02f, 0.03f, 0.06f, 0.6f));
     float bw = 620, bh = 400, bx = (W - bw) / 2, by = (H - bh) / 2;
-    R->FillRound(bx, by, bw, bh, 16, RGBA(0.06f, 0.09f, 0.17f, 0.97f));
-    R->StrokeRound(bx + 5, by + 5, bw - 10, bh - 10, 12, RGBA(0.85f, 0.6f, 0.25f), 2);
+    InkPanel(bx, by, bw, bh, 0.97f);
     R->Text(L"設定", bx, by + 18, bw, 34, 26, RGBA(1, 0.92f, 0.75f), 1, true);
     wchar_t buf[64];
     swprintf_s(buf, L"%.2f 倍", setCamSens);
@@ -305,8 +310,8 @@ void Game::DrawSettings()
     {
         float y = by + 72 + i * 56.f;
         bool sel = setSel == i;
-        R->FillRound(bx + 40, y, bw - 80, 46, 10, sel ? RGBA(0.98f, 0.94f, 0.85f) : RGBA(1, 1, 1, 0.06f));
-        R->Text(names[i], bx + 64, y + 10, 260, 28, 19, sel ? RGBA(0.12f, 0.15f, 0.25f) : RGBA(1, 1, 1), 0, true, !sel);
+        InkRow(bx + 40, y, bw - 80, 46, sel);
+        R->Text(names[i], bx + 64, y + 10, 260, 28, 19, sel ? RGBA(0.16f, 0.12f, 0.1f) : RGBA(1, 1, 1), 0, true, !sel);
         if (i < 4)
         {
             R->Text(L"◀", bx + bw - 290, y + 10, 30, 28, 18, sel ? RGBA(0.85f, 0.5f, 0.15f) : RGBA(1, 1, 1, 0.4f), 1, true, false);
@@ -330,6 +335,7 @@ void Game::Render()
         R->Begin2D();
         DrawTitleUI();
         DrawTransition();
+        if (movie) DrawMovieOverlay();
         R->End2D();
         break;
     case SceneId::Village:
@@ -340,6 +346,7 @@ void Game::Render()
             R->Begin2D();
             DrawWeaponScreen();
             DrawToasts();
+            if (movie) DrawMovieOverlay();
             R->End2D();
             break;
         }
@@ -351,6 +358,7 @@ void Game::Render()
         DrawDialog();
         DrawToasts();
         DrawTransition();
+        if (movie) DrawMovieOverlay();
         R->End2D();
         break;
     case SceneId::Interior:
@@ -360,6 +368,7 @@ void Game::Render()
         DrawDialog();
         DrawToasts();
         DrawTransition();
+        if (movie) DrawMovieOverlay();
         R->End2D();
         break;
     case SceneId::Dungeon:
@@ -369,12 +378,14 @@ void Game::Render()
         DrawDialog();
         DrawToasts();
         DrawTransition();
+        if (movie) DrawMovieOverlay();
         R->End2D();
         break;
     case SceneId::Sheet:
         RenderSheet();
         R->Begin2D();
         DrawSheetUI();
+        if (movie) DrawMovieOverlay();
         R->End2D();
         break;
     }
@@ -388,7 +399,7 @@ void Game::DrawTitleUI()
     R->Text(L"ツムギノサト", 0, 180, W, 120, 92, RGBA(0.12f, 0.2f, 0.36f), 1, true, false, 1);
     R->Text(L"ツムギノサト", 0, 177, W, 120, 92, RGBA(1, 0.98f, 0.94f), 1, true, true, 1);
     R->Text(L"― 霧海の記憶 ―", 0, 300, W, 50, 32, RGBA(1, 1, 1, 0.95f), 1, false, true, 1);
-    R->FillRect(W / 2 - 110, 360, 220, 3, RGBA(0.85f, 0.55f, 0.2f));
+    R->FillRect(W / 2 - 110, 360, 220, 3, RGBA(0.72f, 0.2f, 0.16f));
     R->Text(L"ダンジョン探索 × 町の復興　アクションRPG", 0, 380, W, 30, 20, RGBA(1, 1, 1, 0.9f), 1);
     bool canLoad = HasSave();
     const wchar_t* opts[4] = { L"はじめから", L"つづきから", L"設定", L"ゲームを終了する" };
@@ -397,9 +408,8 @@ void Game::DrawTitleUI()
         float y = 460.f + i * 52.f;
         bool sel = titleSel == i;
         bool enabled = i != 1 || canLoad;
-        R->FillRound(W / 2 - 170, y, 340, 44, 22, sel ? RGBA(0.98f, 0.94f, 0.85f, 0.95f) : RGBA(0.06f, 0.08f, 0.15f, 0.6f));
-        if (sel) R->StrokeRound(W / 2 - 170, y, 340, 44, 22, RGBA(0.85f, 0.55f, 0.2f), 3);
-        D2D1_COLOR_F c = sel ? RGBA(0.12f, 0.15f, 0.25f) : enabled ? RGBA(1, 1, 1) : RGBA(1, 1, 1, 0.35f);
+        InkRow(W / 2 - 170, y, 340, 44, sel);
+        D2D1_COLOR_F c = sel ? RGBA(0.16f, 0.12f, 0.1f) : enabled ? RGBA(1, 1, 1) : RGBA(1, 1, 1, 0.35f);
         R->Text(opts[i], W / 2 - 170, y + 7, 340, 34, 21, c, 1, true, !sel);
     }
     if (!canLoad) R->Text(L"（セーブデータなし）", W / 2 + 90, 524, 200, 24, 13, RGBA(1, 1, 1, 0.6f), 0, false, true);
@@ -407,12 +417,106 @@ void Game::DrawTitleUI()
     if (settingsOpen) DrawSettings();
 }
 
+// ==================================================================
+// UI の共通の部品（和紙と墨）
+//   ゲーム全体の UI はこの部品の組み合わせで描く。色や形を変えたいときは、ここを変えれば全画面に効く
+//     Bar       ：まっすぐなゲージ（敵の頭上の体力、ボスの体力、武器画面など）
+//     SlantBar  ：斜めのゲージ（ダンジョン左上のアニメ風の HUD）
+//     InkPanel  ：墨の板（メニューの枠、HUD の欄など）
+//     InkTab    ：タブ（メニューの上の切り替え）
+//     InkRow    ：選べる行（メニューの項目）
+//   色の決まり：墨＝(0.09, 0.08, 0.09)　和紙＝(0.96, 0.93, 0.86)　朱＝(0.75, 0.2, 0.16)　金の縁＝(0.8, 0.64, 0.4)
+// ==================================================================
+
+// ゲージ：角ばった墨の溝に色を流し込む。上にうすいつや、長いゲージは4分の1ごとに目盛り
+//   v：0〜1 の割合　fill：中身の色　back：溝の色
 void Game::Bar(float x, float y, float w, float h, float v, D2D1_COLOR_F fill, D2D1_COLOR_F back)
 {
-    R->FillRound(x, y, w, h, h * 0.5f, back);
+    // 1px 外側に墨のふち（溝が薄いときでもふちは見えるよう、+0.15 しておく）
+    R->FillRect(x - 1, y - 1, w + 2, h + 2, RGBA(0.05f, 0.04f, 0.05f, 0.75f * back.a + 0.15f));
+    R->FillRect(x, y, w, h, back);
     v = Saturate(v);
-    if (v > 0.001f) R->FillRound(x, y, std::max(h, w * v), h, h * 0.5f, fill);
-    R->StrokeRound(x, y, w, h, h * 0.5f, RGBA(1, 1, 1, 0.35f), 1.f);
+    if (v > 0.001f)
+    {
+        R->FillRect(x, y, w * v, h, fill);
+        R->FillRect(x, y, w * v, std::max(1.f, h * 0.3f), RGBA(1, 1, 1, 0.22f * fill.a));   // 上 3 割に白をうすく重ねて「つや」
+    }
+    // 目盛り：長くて太いゲージだけ。下半分に細い黒い線を3本（25%・50%・75%）
+    if (w > 150 && h >= 6)
+        for (int i = 1; i < 4; i++) R->FillRect(x + w * i / 4.f - 0.5f, y + h * 0.55f, 1.f, h * 0.45f, RGBA(0, 0, 0, 0.35f));
+}
+
+// 斜めのゲージ（平行四辺形）。アニメのゲームの HUD のように、右に傾いた形で勢いを出す
+//   trail：受けたダメージを「白い帯」で遅れて見せる位置（0〜1）。v より大きいと、v〜trail のあいだが白く光る。
+//          ダンジョンの HP では hpTrail を渡し、DrawDungeonUI で少しずつ v に近づけている
+void Game::SlantBar(float x, float y, float w, float h, float v, D2D1_COLOR_F fill, D2D1_COLOR_F back, float trail)
+{
+    float sk = h * 0.6f;   // 傾き：上の辺が下の辺より sk だけ右にずれる（高さに合わせて、細いゲージは少しだけ傾く）
+    // x0〜x1、y0〜y1 の範囲を、同じ傾きの平行四辺形で塗る。
+    // y が上にあるほど右へずらすので、高さの一部（上のつやなど）だけ塗っても、傾きがゲージ全体とそろう
+    auto par = [&](float x0, float x1, float y0, float y1, D2D1_COLOR_F c) {
+        if (x1 <= x0) return;
+        float s0 = sk * (y1 - y) / h, s1 = sk * (y0 - y) / h;   // その高さでのずれ（下ほど大きく引く＝左へ）
+        D2D1_POINT_2F p[4] = { { x0 + sk - s1, y0 }, { x1 + sk - s1, y0 }, { x1 + sk - s0, y1 }, { x0 + sk - s0, y1 } };
+        R->FillPoly(p, 4, c);
+    };
+    v = Saturate(v);
+    // 墨のふち：本体より上下 2px・左右 2〜2.5px 大きい平行四辺形を先に塗る
+    D2D1_POINT_2F o[4] = { { x + sk - 1.5f, y - 2 }, { x + w + sk + 2.5f, y - 2 }, { x + w + 1.5f, y + h + 2 }, { x - 2.5f, y + h + 2 } };
+    R->FillPoly(o, 4, RGBA(0.04f, 0.03f, 0.04f, 0.85f));
+    par(x, x + w, y, y + h, back);                                                                     // 溝
+    if (trail > v) par(x + w * v, x + w * Saturate(trail), y, y + h, RGBA(1, 0.95f, 0.85f, 0.85f));   // 減ったぶんの白い帯
+    par(x, x + w * v, y, y + h, fill);                                                                 // 中身
+    par(x, x + w * v, y, y + h * 0.35f, RGBA(1, 1, 1, 0.28f * fill.a));                               // 上のつや
+}
+
+// 墨の板：左上と右下の角を斜めに切った六角形。落ち影 → 墨 → 金の細い縁 →（大きい板だけ）赤い糸の縫い目
+//   a：不透明さ。0.5 より薄い板には落ち影をつけない（うすい板に影があると濁って見えるため）
+void Game::InkPanel(float x, float y, float w, float h, float a)
+{
+    float k = std::min(12.f, std::min(w, h) * 0.22f);   // 角を切る大きさ（小さい板では小さく）
+    // ox, oy：ずらす量（落ち影用）　in：内側へ縮める量（縫い目用）。縮めたぶん、角の切り方も少し小さくする
+    auto poly = [&](float ox, float oy, float in, D2D1_POINT_2F* p) {
+        float x0 = x + in + ox, y0 = y + in + oy, x1 = x + w - in + ox, y1 = y + h - in + oy, kk = std::max(2.f, k - in * 0.5f);
+        // 左上の切り口 → 右上 → 右下の切り口 → 左下 → 左上の切り口、の順
+        p[0] = { x0 + kk, y0 }; p[1] = { x1, y0 }; p[2] = { x1, y1 - kk }; p[3] = { x1 - kk, y1 }; p[4] = { x0, y1 }; p[5] = { x0, y0 + kk };
+    };
+    D2D1_POINT_2F p[6];
+    if (a > 0.5f) { poly(4, 4, 0, p); R->FillPoly(p, 6, RGBA(0, 0, 0, 0.25f * a)); }   // 右下へ 4px の落ち影
+    poly(0, 0, 0, p);
+    R->FillPoly(p, 6, RGBA(0.09f, 0.08f, 0.09f, a));                                    // 墨
+    R->StrokePoly(p, 6, RGBA(0.8f, 0.64f, 0.4f, 0.5f * a), 1.f);                        // 金の縁
+    // 赤い糸の縫い目：小さい板（HUD の細い欄など）に入れるとうるさいので、大きい板だけ
+    if (h >= 90 && w >= 120) { poly(0, 0, 6, p); R->StrokePoly(p, 6, RGBA(0.78f, 0.26f, 0.2f, 0.55f * a), 1.3f, true); }
+}
+
+// タブ：右に傾いた平行四辺形。選んでいるタブは朱、ほかは墨。文字は呼ぶ側で上に書く
+void Game::InkTab(float x, float y, float w, float h, bool on)
+{
+    float sk = h * 0.3f;   // 傾き
+    D2D1_POINT_2F p[4] = { { x + sk, y }, { x + w, y }, { x + w - sk, y + h }, { x, y + h } };
+    R->FillPoly(p, 4, on ? RGBA(0.72f, 0.2f, 0.16f, 0.97f) : RGBA(0.09f, 0.08f, 0.09f, 0.7f));
+    R->StrokePoly(p, 4, on ? RGBA(0.98f, 0.85f, 0.65f, 0.8f) : RGBA(0.8f, 0.64f, 0.4f, 0.35f), 1.f);
+}
+
+// 選べる行（メニューの項目の背景）
+//   選んでいる行：和紙の札（角を切った形・墨の細い縁・左に朱の印）。文字は呼ぶ側で墨色にする
+//   ほかの行　　：ほぼ透明な地と、下に点線の区切りだけ（墨の板の上に並べる前提）
+void Game::InkRow(float x, float y, float w, float h, bool sel)
+{
+    if (sel)
+    {
+        float k = std::min(8.f, h * 0.25f);
+        D2D1_POINT_2F p[6] = { { x + k, y }, { x + w, y }, { x + w, y + h - k }, { x + w - k, y + h }, { x, y + h }, { x, y + k } };
+        R->FillPoly(p, 6, RGBA(0.96f, 0.93f, 0.86f, 0.97f));
+        R->StrokePoly(p, 6, RGBA(0.3f, 0.22f, 0.17f, 0.8f), 1.f);
+        R->FillRect(x + 4, y + h * 0.2f, 5, h * 0.6f, RGBA(0.75f, 0.2f, 0.16f));   // 朱の印（行の高さの 6 割）
+    }
+    else
+    {
+        R->FillRect(x, y, w, h, RGBA(1, 1, 1, 0.045f));
+        R->DashedLine(x + 10, y + h - 1, x + w - 10, y + h - 1, RGBA(0.85f, 0.75f, 0.6f, 0.18f), 1.f);
+    }
 }
 
 void Game::DrawDialog()
@@ -420,55 +524,121 @@ void Game::DrawDialog()
     if (dialog.empty() || transOn) return;
     float W = (float)R->W, H = (float)R->H;
     const DialogLine& d = dialog.front();
-    float bw = 860, bh = 128, bx = (W - bw) / 2, by = H - bh - (scene == SceneId::Village && !vWalkCam ? 150.f : 34.f);
-    R->FillRound(bx, by, bw, bh, 14, RGBA(0.06f, 0.09f, 0.17f, 0.88f));
-    R->StrokeRound(bx + 4, by + 4, bw - 8, bh - 8, 11, RGBA(0.85f, 0.6f, 0.25f, 0.85f), 2);
-    // 話者アイコン
+    // 会話の囲い：和紙の札。角を斜めに切った紙に、赤い糸の縫い目。文字は墨色の明朝体
+    //   左から「顔（家紋のような二重の輪）｜区切りの線｜セリフ」、上に名前の札、右下に「次へ」の針
+    //   配置モードの村では下に操作の帯が出るので、そのぶん上に置く（150）
+    float bw = 880, bh = 132, bx = (W - bw) / 2, by = H - bh - (scene == SceneId::Village && !vWalkCam ? 150.f : 38.f);
+    const float cut = 16;   // 角を切る大きさ
+    // 枠の形（InkPanel と同じ六角形）。ox, oy：ずらす（落ち影）　in：内側へ縮める（縫い目）
+    auto frame = [&](float ox, float oy, float in, D2D1_POINT_2F* p) {
+        float x0 = bx + in + ox, y0 = by + in + oy, x1 = bx + bw - in + ox, y1 = by + bh - in + oy, k = std::max(2.f, cut - in * 0.6f);
+        p[0] = { x0 + k, y0 }; p[1] = { x1, y0 }; p[2] = { x1, y1 - k }; p[3] = { x1 - k, y1 }; p[4] = { x0, y1 }; p[5] = { x0, y0 + k };
+    };
+    D2D1_POINT_2F pp[6];
+    frame(7, 8, 0, pp);  R->FillPoly(pp, 6, RGBA(0.02f, 0.02f, 0.04f, 0.38f));          // 落ち影
+    frame(0, 0, 0, pp);  R->FillPoly(pp, 6, RGBA(0.96f, 0.93f, 0.86f, 0.97f));          // 和紙
+    R->FillGradientRect(bx + 110, by + 2, bw - 112, 22, RGBA(1, 1, 1, 0.0f), RGBA(1, 1, 1, 0.35f));   // 紙のつや
+    // 和紙の繊維：うすい茶色の短い線を26本。位置は i から計算する（乱数を使わない）ので、
+    // 毎フレーム同じ場所に描かれてちらつかない。fmod で枠の中に収める
+    for (int i = 0; i < 26; i++)
+    {
+        float fx = bx + 20 + std::fmod(i * 137.3f, bw - 60), fy = by + 14 + std::fmod(i * 53.7f, bh - 28);
+        float len = 10 + std::fmod(i * 7.1f, 18.f), ang = std::fmod(i * 0.83f, 3.14f);
+        R->Line(fx, fy, fx + std::cos(ang) * len, fy + std::sin(ang) * len * 0.4f, RGBA(0.55f, 0.42f, 0.3f, 0.10f), 1.f);
+    }
+    frame(0, 0, 0, pp);  R->StrokePoly(pp, 6, RGBA(0.25f, 0.18f, 0.14f, 0.9f), 1.5f);     // 外の墨線
+    frame(0, 0, 9, pp);  R->StrokePoly(pp, 6, RGBA(0.72f, 0.18f, 0.16f, 0.85f), 1.8f, true);   // 赤い糸の縫い目
+
+    // 話者の顔：細い二重の輪（家紋のような枠）
+    //   ソラ・クロベエ・カイリは DrawFaceIcon の顔。ほかの人は色の丸に、目などをここで描き足す
+    float cx = bx + 72, cy = by + bh * 0.5f + 2;
     int face = d.who == L"ソラ" ? 0 : d.who == L"クロベエ" ? 1 : d.who == L"カイリ" ? 2 : -1;
     D2D1_COLOR_F ic = d.who == L"ツムギ" ? RGBA(0.98f, 0.95f, 0.85f) : d.who == L"ナギ" ? RGBA(0.78f, 0.76f, 0.9f) :
                       d.who == L"トウジ" ? RGBA(0.55f, 0.38f, 0.22f) : d.who == L"タヌキの商人" ? RGBA(0.55f, 0.42f, 0.3f) : RGBA(0.2f, 0.3f, 0.6f);
-    if (face >= 0) DrawFaceIcon(face, bx + 62, by + 64, 40);
-    else R->FillCircle(bx + 62, by + 64, 40, ic);
-    R->StrokeCircle(bx + 62, by + 64, 40, RGBA(0.85f, 0.6f, 0.25f), 3);
+    R->FillCircle(cx, cy, 45, RGBA(0.88f, 0.83f, 0.72f));
+    if (face >= 0) DrawFaceIcon(face, cx, cy, 40);
+    else R->FillCircle(cx, cy, 40, ic);
     if (d.who == L"ツムギ")
     {
-        R->FillCircle(bx + 50, by + 62, 5, RGBA(0.1f, 0.1f, 0.15f));
-        R->FillCircle(bx + 74, by + 62, 5, RGBA(0.1f, 0.1f, 0.15f));
-        R->FillCircle(bx + 44, by + 74, 5, RGBA(1, 0.6f, 0.65f, 0.7f));
-        R->FillCircle(bx + 80, by + 74, 5, RGBA(1, 0.6f, 0.65f, 0.7f));
-        R->Line(bx + 52, by + 30, bx + 40, by + 12, RGBA(0.8f, 0.6f, 0.3f), 2.5f);
-        R->Line(bx + 72, by + 30, bx + 84, by + 12, RGBA(0.8f, 0.6f, 0.3f), 2.5f);
+        R->FillCircle(cx - 12, cy - 2, 5, RGBA(0.1f, 0.1f, 0.15f));
+        R->FillCircle(cx + 12, cy - 2, 5, RGBA(0.1f, 0.1f, 0.15f));
+        R->FillCircle(cx - 18, cy + 10, 5, RGBA(1, 0.6f, 0.65f, 0.7f));
+        R->FillCircle(cx + 18, cy + 10, 5, RGBA(1, 0.6f, 0.65f, 0.7f));
+        R->Line(cx - 10, cy - 34, cx - 22, cy - 52, RGBA(0.8f, 0.6f, 0.3f), 2.5f);
+        R->Line(cx + 10, cy - 34, cx + 22, cy - 52, RGBA(0.8f, 0.6f, 0.3f), 2.5f);
     }
     else if (d.who == L"トウジ")
     {
-        R->FillCircle(bx + 50, by + 60, 11, RGBA(1, 0.95f, 0.85f)); R->FillCircle(bx + 74, by + 60, 11, RGBA(1, 0.95f, 0.85f));
-        R->FillCircle(bx + 50, by + 60, 5, RGBA(0.95f, 0.55f, 0.1f)); R->FillCircle(bx + 74, by + 60, 5, RGBA(0.95f, 0.55f, 0.1f));
+        R->FillCircle(cx - 12, cy - 4, 11, RGBA(1, 0.95f, 0.85f)); R->FillCircle(cx + 12, cy - 4, 11, RGBA(1, 0.95f, 0.85f));
+        R->FillCircle(cx - 12, cy - 4, 5, RGBA(0.95f, 0.55f, 0.1f)); R->FillCircle(cx + 12, cy - 4, 5, RGBA(0.95f, 0.55f, 0.1f));
     }
     else if (d.who == L"ナギ")
     {
-        R->FillCircle(bx + 62, by + 70, 24, RGBA(0.98f, 0.88f, 0.8f));
-        R->Line(bx + 50, by + 70, bx + 58, by + 70, RGBA(0.3f, 0.25f, 0.35f), 2);
-        R->Line(bx + 66, by + 70, bx + 74, by + 70, RGBA(0.3f, 0.25f, 0.35f), 2);
+        R->FillCircle(cx, cy + 6, 24, RGBA(0.98f, 0.88f, 0.8f));
+        R->Line(cx - 12, cy + 6, cx - 4, cy + 6, RGBA(0.3f, 0.25f, 0.35f), 2);
+        R->Line(cx + 4, cy + 6, cx + 12, cy + 6, RGBA(0.3f, 0.25f, 0.35f), 2);
     }
-    R->FillRound(bx + 120, by - 18, 170, 34, 8, RGBA(0.85f, 0.55f, 0.2f));
-    R->Text(d.who, bx + 120, by - 14, 170, 30, 19, RGBA(1, 1, 1), 1, true, false);
-    R->Text(d.text, bx + 125, by + 28, bw - 160, bh - 36, 21, RGBA(1, 1, 1), 0, false, true);
-    float a = 0.5f + 0.5f * std::sin(time * 5);
-    R->Text(L"▼", bx + bw - 44, by + bh - 36, 30, 30, 16, RGBA(1, 0.85f, 0.5f, a), 1);
+    R->StrokeCircle(cx, cy, 40, RGBA(0.22f, 0.16f, 0.13f), 1.8f);
+    R->StrokeCircle(cx, cy, 45, RGBA(0.72f, 0.18f, 0.16f, 0.8f), 1.2f);
+    // 区切りの縦線（墨）
+    R->Line(bx + 132, by + 22, bx + 132, by + bh - 22, RGBA(0.3f, 0.22f, 0.18f, 0.35f), 1.f);
+
+    // 名前の札：墨の帯（右へ傾いた平行四辺形）と、赤い判
+    //   幅は名前の文字数から決める（全角1文字 ≒ 21px ＋ 余白 26px）。枠の上辺にまたがるよう、by より 20px 上に置く
+    float nx = bx + 148, ny = by - 20, nw = 26.f + 21.f * (float)d.who.size(), nh = 36, sk = 12;
+    D2D1_POINT_2F tag[4] = { { nx + sk, ny }, { nx + nw + sk, ny }, { nx + nw, ny + nh }, { nx, ny + nh } };
+    D2D1_POINT_2F tagS[4]; for (int i = 0; i < 4; i++) tagS[i] = { tag[i].x + 4, tag[i].y + 4 };
+    R->FillPoly(tagS, 4, RGBA(0, 0, 0, 0.3f));
+    R->FillPoly(tag, 4, RGBA(0.12f, 0.1f, 0.11f, 0.97f));
+    R->FillRect(nx + 4, ny + 9, 6, 18, RGBA(0.78f, 0.2f, 0.16f));
+    R->Text(d.who, nx + 14, ny + 4, nw, 30, 19, RGBA(0.98f, 0.95f, 0.88f), 0, true, false, 1);
+
+    // セリフ（墨色・明朝）
+    R->Text(d.text, bx + 150, by + 30, bw - 200, bh - 40, 21, RGBA(0.16f, 0.12f, 0.1f), 0, true, false, 1);
+    // 次へ：糸のついた針がゆれる（▼ の代わり）。赤い糸の線と、ひし形の針
+    float bob = std::sin(time * 4) * 3;
+    float ax = bx + bw - 42, ay = by + bh - 28 + bob;
+    R->Line(ax - 22, ay - 4, ax - 2, ay + 2, RGBA(0.72f, 0.18f, 0.16f, 0.9f), 1.5f);
+    D2D1_POINT_2F nd[4] = { { ax, ay - 2 }, { ax + 14, ay + 4 }, { ax, ay + 7 }, { ax + 3, ay + 3 } };
+    R->FillPoly(nd, 4, RGBA(0.2f, 0.16f, 0.15f));
+}
+
+// 操作のヒント：墨の帯（両端を斜めに切る）＋下に縫い目
+//   「[E] 調べる」など、近くで何かできるときに出す。ダンジョン・町・建物の中で共通
+//   cx：帯のまん中の x　y：帯の上の y　w：帯の幅
+void Game::DrawInkHint(const std::wstring& s, float cx, float y, float w)
+{
+    float x0 = cx - w / 2, x1 = cx + w / 2, h = 38, sk = 14;
+    D2D1_POINT_2F p[4] = { { x0 + sk, y }, { x1, y }, { x1 - sk, y + h }, { x0, y + h } };
+    D2D1_POINT_2F sh[4]; for (int i = 0; i < 4; i++) sh[i] = { p[i].x + 4, p[i].y + 4 };
+    R->FillPoly(sh, 4, RGBA(0, 0, 0, 0.3f));
+    R->FillPoly(p, 4, RGBA(0.1f, 0.09f, 0.1f, 0.88f));
+    R->DashedLine(x0 + sk + 4, y + h - 6, x1 - sk - 4, y + h - 6, RGBA(0.85f, 0.65f, 0.35f, 0.7f), 1.3f);
+    R->Text(s, x0, y + 6, w, 28, 17, RGBA(0.98f, 0.94f, 0.85f), 1, true, false);
 }
 
 void Game::DrawToasts()
 {
+    // お知らせ：左から滑り込む墨の帯。左端の色の縦帯でお知らせの種類がわかる
+    //   色は ToastMsg に渡した色（黄＝よいこと、赤＝失敗など）。上から順に 46px ずつ積む
     float W = (float)R->W;
     float y = 150;
     for (auto& t : toasts)
     {
+        // a：不透明さ。出てから 0.2 秒でふわっと出て、2.8〜3.4 秒で消える
         float a = t.t < 0.2f ? t.t / 0.2f : (t.t > 2.8f ? Saturate((3.4f - t.t) / 0.6f) : 1.f);
-        float w = 620;
-        R->FillRound((W - w) / 2, y, w, 40, 20, RGBA(0.06f, 0.08f, 0.15f, 0.75f * a));
+        // slide：出てから 0.25 秒で、左 40px の位置から元の位置へ滑り込む
+        float slide = (1 - SmoothStep(0.f, 0.25f, t.t)) * -40.f;
+        float w = 640, h = 38, sk = 12, x0 = (W - w) / 2 + slide, x1 = x0 + w;
+        D2D1_POINT_2F p[4] = { { x0 + sk, y }, { x1, y }, { x1 - sk, y + h }, { x0, y + h } };
+        R->FillPoly(p, 4, RGBA(0.1f, 0.09f, 0.1f, 0.84f * a));
         D2D1_COLOR_F c = t.col; c.a = a;
-        R->Text(t.text, (W - w) / 2, y + 7, w, 32, 19, c, 1, true);
-        y += 48;
+        D2D1_POINT_2F bar[4] = { { x0 + sk, y }, { x0 + sk + 7, y }, { x0 + 7, y + h }, { x0, y + h } };
+        R->FillPoly(bar, 4, c);
+        D2D1_COLOR_F st = t.col; st.a = 0.45f * a;
+        R->DashedLine(x0 + 24, y + h - 5, x1 - sk - 10, y + h - 5, st, 1.2f);
+        R->Text(t.text, x0 + 10, y + 6, w - 20, 30, 18, RGBA(0.98f, 0.95f, 0.88f, a), 1, true, false);
+        y += 46;
     }
 }
 
@@ -700,6 +870,14 @@ void Game::BuildShotScript()
     S(1.4f, nullptr, L"16_floor12_utsuro_appears");
     S(0.1f, [this] { dialog.clear(); autoQTE = false; });
     S(0.75f, nullptr, L"17_qte_prompt");
+    // 2〜4つ目の合図の表示も撮る（キーの文字が1行に収まっているかの確認）。撮ったら1つ目に戻して、いつもの流れへ
+    S(0.1f, [this] { qteStep = 1; qteT = 0; qteMash = 3; qteFailT = 0; });
+    S(0.4f, nullptr, L"17b_qte_mash");
+    S(0.1f, [this] { qteStep = 2; qteT = 0; qteMash = 0; });
+    S(0.4f, nullptr, L"17c_qte_e");
+    S(0.1f, [this] { qteStep = 3; qteT = 0; qteMash = 0; });
+    S(0.4f, nullptr, L"17d_qte_rclick");
+    S(0.1f, [this] { qteStep = 0; qteT = 0; qteMash = 0; qteFailT = 0; });
     S(0.1f, [this] { autoQTE = true; });
     S(4.2f, [this, logD] {
         int spools = 0; for (auto& ch : chests) if (ch.kind == 2 && !ch.opened) spools++;

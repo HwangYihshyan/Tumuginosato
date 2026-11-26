@@ -228,7 +228,7 @@ void Game::DrawKurobee(const Actor& a, float alpha)
             }
         }
     }
-    DrawParams np; np.color = C4(0.85f, 0.88f, 0.92f); np.outline = 0.012f; np.rim = 0.6f; np.emissive = em;
+    DrawParams np; np.color = C4(0.85f, 0.88f, 0.92f); np.outline = 0.012f; np.rim = 0.6f; np.emissive = em; np.spec = 1.3f;
     Seg(tail, tip, 0.06f, np);
     DrawParams hole; hole.color = C4(0.15f, 0.12f, 0.12f);
     R->Draw(R->sphere, S(0.08f, 0.08f, 0.08f) * Tr(Lerp3(tail, tip, 0.12f).x, Lerp3(tail, tip, 0.12f).y, Lerp3(tail, tip, 0.12f).z), hole);
@@ -340,7 +340,7 @@ void Game::DrawKairi(const Actor& a, float alpha)
     R->Draw(R->sphere, S(0.13f, 0.13f, 0.13f) * Tr(handR.x, handR.y, handR.z), hp);
     if (showNeedles)
     {
-        DrawParams np; np.color = C4(0.88f, 0.9f, 0.95f); np.rim = 0.7f; np.emissive = em;
+        DrawParams np; np.color = C4(0.88f, 0.9f, 0.95f); np.rim = 0.7f; np.emissive = em; np.spec = 1.3f;
         if (big)
         {
             np.emissive = Add(em, Mul(F3(0.3f, 0.5f, 0.7f), 0.5f + 0.5f * std::sin(time * 14)));

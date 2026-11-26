@@ -172,16 +172,15 @@ void Game::DrawTalkMenu()
     const Walker& w = walkers[talkWalker];
     int id = SpeakerId(w);
     float bw = 460, bh = 68 + 5 * 52.f + 20, bx = W - bw - 40, by = H - bh - 60;
-    R->FillRound(bx, by, bw, bh, 14, RGBA(0.06f, 0.09f, 0.17f, 0.95f));
-    R->StrokeRound(bx + 5, by + 5, bw - 10, bh - 10, 10, RGBA(0.85f, 0.6f, 0.25f), 2);
+    InkPanel(bx, by, bw, bh, 0.95f);
     R->Text(WalkerName(w) + L"　― 何を話す？", bx + 22, by + 16, bw - 44, 30, 20, RGBA(1, 0.92f, 0.75f), 0, true);
     for (int i = 0; i < 5; i++)
     {
         float y = by + 60 + i * 52.f;
         bool sel = talkSel == i;
-        R->FillRound(bx + 18, y, bw - 36, 46, 10, sel ? RGBA(0.98f, 0.94f, 0.85f) : RGBA(1, 1, 1, 0.06f));
-        R->Text(kTopics[i], bx + 36, y + 4, 200, 24, 17, sel ? RGBA(0.12f, 0.15f, 0.25f) : RGBA(1, 1, 1), 0, true, !sel);
-        R->Text(kTopicDesc[i], bx + 36, y + 25, bw - 80, 20, 12, sel ? RGBA(0.3f, 0.35f, 0.45f) : RGBA(1, 1, 1, 0.65f), 0, false, !sel);
+        InkRow(bx + 18, y, bw - 36, 46, sel);
+        R->Text(kTopics[i], bx + 36, y + 4, 200, 24, 17, sel ? RGBA(0.16f, 0.12f, 0.1f) : RGBA(1, 1, 1), 0, true, !sel);
+        R->Text(kTopicDesc[i], bx + 36, y + 25, bw - 80, 20, 12, sel ? RGBA(0.42f, 0.34f, 0.28f) : RGBA(1, 1, 1, 0.65f), 0, false, !sel);
         // まだ聞いていない話題には印
         int gs, gf, gk;
         bool fresh = (i == 1 && !((talkGift >> id) & 1u) && FindGift(w, gs, gf, gk)) || (i == 2 && !((talkBoost >> id) & 1u));

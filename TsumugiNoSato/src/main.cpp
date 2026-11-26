@@ -1,6 +1,7 @@
 // ツムギノサト ― 霧海の記憶 ―（垂直スライス）
 // C++17 / DirectX 11
 #include "Game.h"
+#include "Recorder.h"
 #include <shellapi.h>
 #include <filesystem>
 
@@ -65,6 +66,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int)
 
     bool autoshot = false;
     std::wstring shotDir = L"Screenshots";
+    std::wstring moviePath;    // --movie 出力.mp4：紹介動画の台本を流して、MP4 に書き出す
     int argc = 0;
     LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     for (int i = 1; i < argc; i++)
@@ -73,6 +75,12 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int)
         {
             autoshot = true;
             if (i + 1 < argc) shotDir = argv[++i];
+        }
+        else if (std::wstring(argv[i]) == L"--movie" && i + 1 < argc)
+        {
+            autoshot = true;   // 自動操作のしくみ（台本・固定の時間の進み）は撮影デモと同じ
+            moviePath = std::filesystem::absolute(argv[++i]).wstring();
+            shotDir = (std::filesystem::path(moviePath).parent_path() / L"movie_work").wstring();   // デモ用のセーブなどの置き場
         }
     }
     LocalFree(argv);
@@ -106,9 +114,19 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int)
     }
     Game game;
     game.autoshot = autoshot;
+    game.movie = !moviePath.empty();
     game.shotDir = shotDir;
     if (autoshot) std::filesystem::create_directories(shotDir);
     if (!game.Init(&renderer, assets)) return 1;
+    // 紹介動画：ゲームは 60 コマ/秒で進め、2 コマに 1 枚を 30fps の MP4 に書き込む
+    VideoRecorder recorder;
+    std::vector<uint8_t> framePx;
+    int frameNo = 0;
+    if (game.movie && !recorder.Open(moviePath, W, H, 30, 8000000))
+    {
+        MessageBoxW(hwnd, L"動画ファイルを作れませんでした", L"ツムギノサト", MB_OK | MB_ICONERROR);
+        return 1;
+    }
 
     LARGE_INTEGER freq, prev, now;
     QueryPerformanceFrequency(&freq);
@@ -137,6 +155,11 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int)
             renderer.SaveScreenshot(game.pendingShot);
             game.pendingShot.clear();
         }
+        if (recorder.IsOpen() && (frameNo++ % 2) == 0)
+        {
+            int pitch = 0;
+            if (renderer.CaptureFrame(framePx, pitch)) recorder.AddFrame(framePx.data(), pitch);
+        }
         renderer.Present(!autoshot);
         g_in.EndFrame();
 
@@ -152,6 +175,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int)
         if (lock != cursorHidden) { ShowCursor(lock ? FALSE : TRUE); cursorHidden = lock; }
     }
     if (cursorHidden) ShowCursor(TRUE);
+    recorder.Close();   // MP4 を書き終える
     }
     CoUninitialize();
     return rc2;

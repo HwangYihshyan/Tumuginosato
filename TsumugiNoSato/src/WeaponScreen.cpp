@@ -28,6 +28,7 @@ void Game::RenderWeaponShowcase()
     fs.clear = F3(0.06f, 0.05f, 0.06f);
     fs.fogColor = fs.clear; fs.fogStart = 7; fs.fogEnd = 20; fs.fogMax = 0.85f;
     fs.ambient = F3(0.45f, 0.42f, 0.46f);
+    fs.shadowColor = F3(0.85f, 0.78f, 0.95f);
     fs.lightDir = F3(-0.45f, -1.f, 0.55f);
     fs.lightColor = F3(1.0f, 0.9f, 0.8f);
     fs.time = time;
@@ -107,7 +108,7 @@ void Game::DrawWeaponScreen()
     {
         float tx = W - 6 * 92 - 20 + i * 92;
         bool on = i == 2;
-        R->FillRound(tx, 12, 86, 28, 14, on ? RGBA(0.85f, 0.55f, 0.2f) : RGBA(1, 1, 1, 0.1f));
+        InkTab(tx, 12, 86, 28, on);
         R->Text(kTabsW[i], tx, 16, 86, 22, 13, RGBA(1, 1, 1, on ? 1.f : 0.7f), 1, on, false);
     }
 
@@ -124,8 +125,8 @@ void Game::DrawWeaponScreen()
         for (int s = -1; s <= 1; s += 2)
         {
             float kx = pcx + s * 96 - 22;
-            R->FillRound(kx, pcy - 60, 44, 26, 6, RGBA(0.1f, 0.1f, 0.12f, 0.85f));
-            R->StrokeRound(kx, pcy - 60, 44, 26, 6, RGBA(1, 1, 1, 0.7f), 1.5f);
+            R->FillRect(kx, pcy - 60, 44, 26, RGBA(0.1f, 0.1f, 0.12f, 0.85f));
+            R->StrokeRect(kx, pcy - 60, 44, 26, RGBA(1, 1, 1, 0.7f), 1.5f);
             R->Text(s < 0 ? L"Z" : L"C", kx, pcy - 57, 44, 22, 16, RGBA(1, 1, 1), 1, true, false);
         }
     }
@@ -145,12 +146,12 @@ void Game::DrawWeaponScreen()
     R->Text(std::wstring(wd.name) + el, sx, sy + 8, sw, 32, 22, wd.element == 1 ? RGBA(0.65f, 0.15f, 0.08f) : wd.element == 2 ? RGBA(0.1f, 0.3f, 0.65f) : RGBA(0.2f, 0.15f, 0.1f), 1, true, false);
     // 装備中かどうか
     float bx = pcx - 70, by = sy + 54;
-    R->FillRound(bx, by, 140, 26, 13, equipped ? RGBA(0.08f, 0.08f, 0.1f, 0.9f) : RGBA(0.85f, 0.55f, 0.2f, 0.95f));
+    InkTab(bx, by, 140, 26, !equipped);
     R->Text(equipped ? L"装備中" : L"Enter で装備", bx, by + 3, 140, 22, 15, equipped ? RGBA(1, 0.85f, 0.4f) : RGBA(1, 1, 1), 1, true, false);
 
     // ---- キャラの左：能力
     float stx = pcx - 330, sty = 270;
-    R->FillRound(stx - 12, sty - 14, 190, 196, 10, RGBA(0.03f, 0.04f, 0.08f, 0.55f));
+    InkPanel(stx - 12, sty - 14, 190, 196, 0.55f);
     swprintf_s(buf, L"Lv %d", lvl);
     R->FillCircle(stx + 10, sty + 6, 9, RGBA(0.95f, 0.95f, 1));
     R->Text(buf, stx + 26, sty - 6, 140, 24, 18, RGBA(1, 1, 1), 0, true);
@@ -179,10 +180,9 @@ void Game::DrawWeaponScreen()
 
     // ---- キャラの右上：成長の札
     float gx = pcx + 120, gy = 262;
-    R->FillRound(gx, gy, 300, 52, 10, RGBA(0.05f, 0.07f, 0.13f, 0.85f));
-    R->StrokeRound(gx, gy, 300, 52, 10, RGBA(0.6f, 0.75f, 0.95f), 2);
+    InkPanel(gx, gy, 300, 52, 0.85f);
     R->FillRound(gx + 10, gy + 10, 32, 32, 6, RGBA(0.85f, 0.85f, 0.9f));
-    R->Line(gx + 16, gy + 36, gx + 36, gy + 16, RGBA(0.3f, 0.35f, 0.45f), 4);
+    R->Line(gx + 16, gy + 36, gx + 36, gy + 16, RGBA(0.42f, 0.34f, 0.28f), 4);
     swprintf_s(buf, L"成長：あと %d で Lv%d", (int)std::ceil(std::max(0.f, 100.f * lvl - exp)), lvl + 1);
     R->Text(buf, gx + 52, gy + 13, 240, 28, 17, RGBA(1, 1, 1), 0, true);
 
@@ -193,11 +193,11 @@ void Game::DrawWeaponScreen()
         int row = (int)mine.size() + s;
         bool on = sel == row;
         float y = ay + s * 44.f;
-        R->FillRound(ax, y, 300, 38, 9, on ? RGBA(0.98f, 0.94f, 0.85f) : RGBA(0.05f, 0.07f, 0.13f, 0.8f));
+        InkRow(ax, y, 300, 38, on);
         int at = weapons[A.weapon].att[s];
         swprintf_s(buf, L"枠%d：%s", s + 1, at >= 0 ? kAttach[at].name : L"（空き）");
-        R->Text(buf, ax + 14, y + 7, 160, 26, 16, on ? RGBA(0.12f, 0.15f, 0.25f) : RGBA(0.85f, 0.95f, 0.8f), 0, true, !on);
-        R->Text(at >= 0 ? kAttach[at].desc : L"Enter で付ける", ax + 130, y + 9, 160, 24, 13, on ? RGBA(0.3f, 0.35f, 0.45f) : RGBA(1, 1, 1, 0.65f), 2, false, !on);
+        R->Text(buf, ax + 14, y + 7, 160, 26, 16, on ? RGBA(0.16f, 0.12f, 0.1f) : RGBA(0.85f, 0.95f, 0.8f), 0, true, !on);
+        R->Text(at >= 0 ? kAttach[at].desc : L"Enter で付ける", ax + 130, y + 9, 160, 24, 13, on ? RGBA(0.42f, 0.34f, 0.28f) : RGBA(1, 1, 1, 0.65f), 2, false, !on);
     }
 
     // ---- 右端：持っている武器の一覧（W/S）
@@ -208,19 +208,18 @@ void Game::DrawWeaponScreen()
         const OwnedWeapon& w = weapons[mine[i]];
         bool on = sel == i;
         float y = ly + 28 + i * 40.f;
-        R->FillRound(lx, y, 250, 34, 8, on ? RGBA(0.98f, 0.94f, 0.85f) : RGBA(0.05f, 0.07f, 0.13f, 0.8f));
+        InkRow(lx, y, 250, 34, on);
         if (on) R->Text(L"☞", lx - 30, y + 2, 30, 30, 22, RGBA(1, 1, 1), 1, true);
         std::wstring nm = std::wstring(mine[i] == A.weapon ? L"▶ " : L"　") + kWeapons[w.def].name;
         bool br = mine[i] == A.weapon ? A.broken : w.broken;
-        R->Text(nm, lx + 8, y + 6, 180, 24, 15, on ? RGBA(0.12f, 0.15f, 0.25f) : RGBA(1, 1, 1), 0, true, !on);
+        R->Text(nm, lx + 8, y + 6, 180, 24, 15, on ? RGBA(0.16f, 0.12f, 0.1f) : RGBA(1, 1, 1), 0, true, !on);
         if (br) R->Text(L"壊れ", lx + 190, y + 7, 52, 22, 13, RGBA(1, 0.45f, 0.4f), 2, true, !on);
         else if (kWeapons[w.def].element) R->Text(kElem[kWeapons[w.def].element], lx + 190, y + 7, 52, 22, 13, kWeapons[w.def].element == 1 ? RGBA(1, 0.5f, 0.35f) : RGBA(0.45f, 0.7f, 1), 2, true, !on);
     }
 
     // ---- 下中央：耐久と経験のゲージ
     float gbx = pcx - 230, gby = 478;
-    R->FillRound(gbx, gby, 460, 76, 10, RGBA(0.28f, 0.34f, 0.5f, 0.92f));
-    R->StrokeRound(gbx, gby, 460, 76, 10, RGBA(0.75f, 0.82f, 0.95f), 2);
+    InkPanel(gbx, gby, 460, 76, 0.92f);
     float dk = Saturate(dur / std::max(1.f, (float)wd.maxDur));
     R->Text(L"耐久", gbx + 16, gby + 10, 60, 24, 16, RGBA(1, 1, 1), 0, true);
     swprintf_s(buf, broken ? L"壊れている" : L"%d / %d", (int)dur, wd.maxDur);
@@ -233,8 +232,7 @@ void Game::DrawWeaponScreen()
 
     // ---- 左下：武器に使う道具
     float ibx = 60, iby = H - 156;
-    R->FillRound(ibx, iby, 430, 110, 12, RGBA(0.28f, 0.34f, 0.5f, 0.92f));
-    R->StrokeRound(ibx, iby, 430, 110, 12, RGBA(0.75f, 0.82f, 0.95f), 2);
+    InkPanel(ibx, iby, 430, 110, 0.92f);
     struct It { int idx; const wchar_t* key; D2D1_COLOR_F c; const wchar_t* note; };
     It its[2] = { { 2, L"R", RGBA(0.75f, 0.8f, 0.9f), L"耐久を30%回復" }, { 4, L"F", RGBA(0.95f, 0.5f, 0.7f), L"壊れた最初の武器を直す" } };
     const wchar_t* inm[ITEM_N] = { L"薬草", L"灯油", L"研ぎ粉", L"帰り糸", L"繕い糸" };
@@ -252,15 +250,10 @@ void Game::DrawWeaponScreen()
 
     // ---- 右下：説明
     float dbx = W / 2 + 20, dby = H - 156;
-    R->FillRound(dbx, dby, W - dbx - 40, 110, 12, RGBA(0.04f, 0.05f, 0.12f, 0.92f));
-    R->StrokeRound(dbx, dby, W - dbx - 40, 110, 12, RGBA(0.75f, 0.82f, 0.95f), 2);
+    InkPanel(dbx, dby, W - dbx - 40, 110, 0.92f);
     R->Text(L"「" + std::wstring(wd.name) + L"」", dbx + 18, dby + 10, W - dbx - 76, 28, 19, RGBA(1, 0.95f, 0.85f), 0, true);
     std::wstring desc = wd.desc;
     if (IsStarter(ow.def)) desc += L"。壊れても消えない";
     else desc += L"。壊れると消える（アタッチメントは戻る）";
     R->Text(desc, dbx + 18, dby + 42, W - dbx - 76, 60, 16, RGBA(1, 1, 1, 0.9f));
-
-    R->FillRect(0, H - 30, W, 30, RGBA(0.04f, 0.05f, 0.1f, 0.75f));
-    R->Text(L"W/S：武器・枠を選ぶ　Enter：装備／付け替え　Z/C：キャラ切り替え　R：研ぎ粉　F：繕い糸　A/D：タブ　Esc：閉じる",
-            0, H - 26, W, 24, 14, RGBA(1, 1, 1, 0.85f), 1, false, false);
 }

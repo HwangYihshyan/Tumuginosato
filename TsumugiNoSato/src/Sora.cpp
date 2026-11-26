@@ -282,16 +282,16 @@ void Game::DrawScissors(XMMATRIX W, float open, XMFLOAT3 em, int element)
     if (element == 1) { steel = C4(0.95f, 0.55f, 0.45f); steel2 = C4(0.8f, 0.35f, 0.3f); em = Add(em, F3(0.18f, 0.05f, 0.02f)); }
     if (element == 2) { steel = C4(0.55f, 0.8f, 0.98f); steel2 = C4(0.4f, 0.62f, 0.88f); em = Add(em, F3(0.02f, 0.08f, 0.16f)); }
     XMFLOAT4 orange = C4(0.96f, 0.56f, 0.16f), orangeDark = C4(0.78f, 0.38f, 0.1f), silver = C4(0.9f, 0.9f, 0.92f);
-    auto D = [&](const Mesh& m, XMMATRIX L, XMFLOAT4 c, float ol, XMFLOAT3 e2 = { 0, 0, 0 }) {
-        DrawParams p; p.color = c; p.outline = ol; p.emissive = Add(em, e2); p.rim = 0.7f;
+    auto D = [&](const Mesh& m, XMMATRIX L, XMFLOAT4 c, float ol, XMFLOAT3 e2 = { 0, 0, 0 }, float spec = 0.f) {
+        DrawParams p; p.color = c; p.outline = ol; p.emissive = Add(em, e2); p.rim = 0.7f; p.spec = spec;
         R->Draw(m, L * W, p);
     };
-    // 刃（支点を軸に左右へ開く）
+    // 刃（支点を軸に左右へ開く）。鋼の刃にはトゥーンのハイライトを乗せる
     XMMATRIX A = Tr(0, 0.024f, 0) * XMMatrixRotationY(open) * Tr(0, 0, kPivotZ);
     XMMATRIX B = Tr(0, -0.024f, 0) * XMMatrixRotationY(-open) * Tr(0, 0, kPivotZ);
-    D(bladeA, A, steel, 0.012f);
+    D(bladeA, A, steel, 0.012f, { 0, 0, 0 }, 1.5f);
     D(edgeA, A, white, 0, { 0.35f, 0.35f, 0.35f });
-    D(bladeB, B, steel2, 0.012f);
+    D(bladeB, B, steel2, 0.012f, { 0, 0, 0 }, 1.5f);
     D(edgeB, B, white, 0, { 0.35f, 0.35f, 0.35f });
     // 持ち手（オレンジの糸巻き）
     D(R->cube, S(0.11f, 0.08f, 0.56f) * Tr(0, 0, -0.06f), orange, 0.012f);
@@ -301,7 +301,7 @@ void Game::DrawScissors(XMMATRIX W, float open, XMFLOAT3 em, int element)
     D(R->sphere, S(0.08f, 0.04f, 0.08f) * Tr(0, 0.065f, kPivotZ), silver, 0);
     D(R->sphere, S(0.08f, 0.04f, 0.08f) * Tr(0, -0.065f, kPivotZ), silver, 0);
     // U字ばね
-    DrawParams sp; sp.color = silver; sp.outline = 0.008f; sp.emissive = em; sp.rim = 0.6f;
+    DrawParams sp; sp.color = silver; sp.outline = 0.008f; sp.emissive = em; sp.rim = 0.6f; sp.spec = 1.3f;
     XMFLOAT3 prev{};
     for (int i = 0; i <= 8; i++)
     {

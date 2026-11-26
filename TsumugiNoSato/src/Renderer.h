@@ -30,6 +30,7 @@ struct DrawParams
     bool alphaClip = false;
     float outline = 0.f;
     float rim = 0.25f;
+    float spec = 0.f;          // トゥーンのハイライトの強さ（金属など）
     bool worldUV = false;
     float fog = 1.f;
     Blend blend = Blend::Opaque;
@@ -52,6 +53,7 @@ struct FrameSettings
     XMFLOAT3 fogColor{ 0.8f, 0.8f, 0.85f };
     float fogStart = 20, fogEnd = 80, fogMax = 1, heightFog = 0;
     XMFLOAT3 clear{ 0.5f, 0.6f, 0.7f };
+    XMFLOAT3 shadowColor{ 1, 1, 1 };   // 影の部分にかける色（白なら色なし）
     float time = 0;
     std::vector<PointLight> lights;
 };
@@ -80,6 +82,11 @@ public:
     void FillCircle(float cx, float cy, float r, D2D1_COLOR_F c);
     void StrokeCircle(float cx, float cy, float r, D2D1_COLOR_F c, float width = 1.5f);
     void Line(float x0, float y0, float x1, float y1, D2D1_COLOR_F c, float width = 1.5f);
+    // 多角形（角を切った枠・平行四辺形など）。dashed = 縫い目のような点線
+    void FillPoly(const D2D1_POINT_2F* pts, int n, D2D1_COLOR_F c);
+    void StrokePoly(const D2D1_POINT_2F* pts, int n, D2D1_COLOR_F c, float width = 1.5f, bool dashed = false);
+    void DashedLine(float x0, float y0, float x1, float y1, D2D1_COLOR_F c, float width = 1.5f);
+    void FillGradientRect(float x, float y, float w, float h, D2D1_COLOR_F left, D2D1_COLOR_F right);   // 横のグラデーション
     void Text(const std::wstring& s, float x, float y, float w, float h, float size, D2D1_COLOR_F c,
               int align = 0, bool bold = false, bool shadow = true, int family = 0);
 
@@ -93,6 +100,8 @@ public:
 
     void Present(bool vsync);
     bool SaveScreenshot(const std::wstring& path);
+    // いまの画面を BGRA の画素で取り出す（動画の書き出し用）。pitch は 1 行のバイト数（W*4）
+    bool CaptureFrame(std::vector<uint8_t>& out, int& pitch);
     bool Project(XMFLOAT3 world, float& sx, float& sy) const;
     void ScreenRay(float sx, float sy, XMFLOAT3& origin, XMFLOAT3& dir) const;
 
@@ -105,6 +114,7 @@ public:
 private:
     void SetStates(const DrawParams& p);
     void SetupCamera(const FrameSettings& fs, float aspect);
+    ComPtr<ID3D11Texture2D> captureStaging;   // CaptureFrame で使い回す読み出し用テクスチャ
     ComPtr<ID3D11Texture2D> atlasMs, atlasTex;
     ComPtr<ID3D11RenderTargetView> atlasRTV;
     ComPtr<ID3D11DepthStencilView> atlasDSV;
@@ -135,6 +145,8 @@ private:
     ComPtr<ID2D1DeviceContext> d2d;
     ComPtr<ID2D1Bitmap1> d2dTarget;
     ComPtr<ID2D1SolidColorBrush> brush;
+    ComPtr<ID2D1StrokeStyle> stitchStyle;   // 縫い目の点線
+    ComPtr<ID2D1PathGeometry> MakePoly(const D2D1_POINT_2F* pts, int n);
     ComPtr<IDWriteFactory> dwrite;
     std::map<int, ComPtr<IDWriteTextFormat>> fonts;
 

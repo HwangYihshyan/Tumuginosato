@@ -323,39 +323,92 @@ void Game::DrawTownMenu()
 {
     if (townWeapon) return;
     float W = (float)R->W, H = (float)R->H;
-    R->FillRect(0, 0, W, H, RGBA(0.02f, 0.03f, 0.06f, 0.5f));
-    // 左：項目
-    float lx = 60, ly = 90, lw = 300;
-    R->Text(L"村のメニュー", lx, 36, 400, 40, 28, RGBA(1, 0.92f, 0.75f), 0, true);
+    // 村のメニュー：機織りの村らしく「糸巻き」と「巻物」で見せる
+    //   左：縦糸に通した糸巻きが項目。選んだ糸巻きから糸がのびて、右の巻物へつながる
+    //   右：木の軸のついた和紙の巻物に、墨の文字で中身を書く
+    R->FillRect(0, 0, W, H, RGBA(0.05f, 0.04f, 0.03f, 0.55f));
+    R->FillGradientRect(0, 0, 420, H, RGBA(0.04f, 0.03f, 0.03f, 0.6f), RGBA(0.04f, 0.03f, 0.03f, 0.f));
+    const D2D1_COLOR_F threadCol[4] = { RGBA(0.22f, 0.32f, 0.62f), RGBA(0.75f, 0.22f, 0.2f), RGBA(0.88f, 0.64f, 0.22f), RGBA(0.32f, 0.6f, 0.36f) };
+    const D2D1_COLOR_F ink = RGBA(0.18f, 0.13f, 0.1f), inkSoft = RGBA(0.18f, 0.13f, 0.1f, 0.55f), wood = RGBA(0.42f, 0.27f, 0.16f), woodDark = RGBA(0.25f, 0.15f, 0.09f);
+
+    // 題字：朱の判と村の名前
+    R->FillRect(60, 24, 46, 46, RGBA(0.75f, 0.2f, 0.16f));
+    R->StrokeRect(63, 27, 40, 40, RGBA(1, 0.9f, 0.8f, 0.8f), 1.5f);
+    R->Text(L"紡", 60, 29, 46, 40, 28, RGBA(1, 0.96f, 0.9f), 1, true, false, 1);
+    R->Text(L"ハタオリ村", 118, 20, 300, 40, 30, RGBA(1, 0.97f, 0.9f), 0, true, true, 1);
+    R->Text(L"村のしおり", 120, 54, 200, 22, 14, RGBA(1, 0.88f, 0.7f, 0.85f), 0, true, true);
+
+    // 左：縦糸と糸巻き
+    float lx = 60, ly = 96, lw = 300, step = 60.f;
+    float tx = lx + 22;
+    R->Line(tx, ly - 6, tx, ly + (kTownN - 1) * step + 46, RGBA(0.95f, 0.9f, 0.8f, 0.7f), 2.f);   // 縦糸
+    float rx = 420, ry = 84, rw = W - rx - 56, rh = H - ry - 40;
     for (int i = 0; i < kTownN; i++)
     {
-        float y = ly + i * 62.f;
+        float y = ly + i * step;
         bool sel = i == townSel;
-        R->FillRound(lx, y, lw, 52, 10, sel ? RGBA(0.98f, 0.94f, 0.85f) : RGBA(0.06f, 0.09f, 0.17f, 0.9f));
-        R->StrokeRound(lx, y, lw, 52, 10, sel ? RGBA(0.95f, 0.55f, 0.15f) : RGBA(0.75f, 0.8f, 0.95f, 0.5f), sel ? 2.5f : 1.f);
-        R->Text(kTownMenu[i], lx + 24, y + 12, lw - 40, 30, 20, sel ? RGBA(0.12f, 0.15f, 0.25f) : RGBA(1, 1, 1), 0, true, !sel);
-        if (sel) R->Text(L"☞", lx - 34, y + 8, 30, 36, 26, RGBA(1, 1, 1), 1, true);
+        D2D1_COLOR_F tc = threadCol[i % 4];
+        if (sel)
+        {
+            // 選んだ項目：和紙の札と、巻物までのびる糸（少したるむ）
+            float mx = (lx + lw + rx) * 0.5f, my = y + 26 + 10;
+            R->Line(lx + lw, y + 26, mx, my, tc, 2.5f);
+            R->Line(mx, my, rx + 2, ry + 40, tc, 2.5f);
+            InkRow(lx + 40, y, lw - 40, 52, true);
+        }
+        else R->FillGradientRect(lx + 40, y + 4, lw - 40, 44, RGBA(0.06f, 0.05f, 0.05f, 0.75f), RGBA(0.06f, 0.05f, 0.05f, 0.1f));
+        // 糸巻き（木のつば＋巻いた糸）。選ぶと少し大きく、ゆっくり回るように縞が動く
+        float s = sel ? 1.25f : 1.f, cy = y + 26;
+        R->FillRect(tx - 11 * s, cy - 11 * s, 22 * s, 4 * s, wood);
+        R->FillRect(tx - 11 * s, cy + 7 * s, 22 * s, 4 * s, wood);
+        R->FillRect(tx - 8 * s, cy - 7 * s, 16 * s, 14 * s, tc);
+        float ph = sel ? std::fmod(time * 6.f, 4.f) : 0.f;
+        for (int k = 0; k < 3; k++) R->Line(tx - 8 * s, cy - 6 * s + std::fmod(k * 4.f + ph, 12.f) * s, tx + 8 * s, cy - 4 * s + std::fmod(k * 4.f + ph, 12.f) * s, RGBA(1, 1, 1, 0.3f), 1.f);
+        R->StrokeRect(tx - 11 * s, cy - 11 * s, 22 * s, 22 * s, woodDark, 1.f);
+        R->Text(kTownMenu[i], lx + 60, y + 12, lw - 70, 30, 20, sel ? ink : RGBA(1, 0.97f, 0.9f), 0, true, !sel, sel ? 1 : 0);
     }
-    // 右：中身
-    float rx = 400, ry = 90, rw = W - rx - 60, rh = 62 * kTownN - 10;
-    R->FillRound(rx, ry, rw, rh, 14, RGBA(0.06f, 0.09f, 0.17f, 0.94f));
-    R->StrokeRound(rx + 5, ry + 5, rw - 10, rh - 10, 10, RGBA(0.85f, 0.6f, 0.25f), 2);
-    R->Text(kTownMenuDesc[townSel], rx + 24, ry + 18, rw - 48, 28, 17, RGBA(1, 0.92f, 0.75f), 0, true);
+
+    // 右：巻物（上下に木の軸、あいだに和紙）
+    R->FillRect(rx + 6, ry + 18, rw, rh - 26, RGBA(0, 0, 0, 0.35f));                          // 落ち影
+    R->FillRect(rx, ry + 10, rw, rh - 20, RGBA(0.96f, 0.93f, 0.86f, 0.98f));                  // 和紙
+    R->FillGradientRect(rx, ry + 10, 60, rh - 20, RGBA(0.75f, 0.68f, 0.55f, 0.25f), RGBA(0.75f, 0.68f, 0.55f, 0.f));   // 紙のまるみ
+    for (int i = 0; i < 30; i++)
+    {
+        float fx = rx + 20 + std::fmod(i * 157.3f, rw - 60), fy = ry + 30 + std::fmod(i * 61.7f, rh - 70);
+        float len = 10 + std::fmod(i * 7.1f, 18.f), ang = std::fmod(i * 0.83f, 3.14f);
+        R->Line(fx, fy, fx + std::cos(ang) * len, fy + std::sin(ang) * len * 0.4f, RGBA(0.55f, 0.42f, 0.3f, 0.09f), 1.f);
+    }
+    for (int k = 0; k < 2; k++)
+    {
+        float yy = k == 0 ? ry : ry + rh - 20;
+        R->FillRound(rx - 16, yy, rw + 32, 20, 10, wood);
+        R->FillRect(rx - 16 + 10, yy + 3, rw + 12, 3, RGBA(1, 0.85f, 0.65f, 0.25f));
+        R->FillCircle(rx - 18, yy + 10, 11, woodDark);
+        R->FillCircle(rx + rw + 18, yy + 10, 11, woodDark);
+    }
+    R->DashedLine(rx + 14, ry + 30, rx + rw - 14, ry + 30, RGBA(0.72f, 0.18f, 0.16f, 0.7f), 1.5f);
+    R->DashedLine(rx + 14, ry + rh - 30, rx + rw - 14, ry + rh - 30, RGBA(0.72f, 0.18f, 0.16f, 0.7f), 1.5f);
+    // 見出し
+    R->Text(kTownMenu[townSel], rx + 30, ry + 40, rw - 60, 36, 24, ink, 0, true, false, 1);
+    R->FillRect(rx + 30, ry + 78, 60, 3, threadCol[townSel % 4]);
+    R->Text(kTownMenuDesc[townSel], rx + 30, ry + 86, rw - 60, 24, 15, inkSoft, 0, true, false);
     wchar_t buf[160];
-    float y = ry + 64;
-    auto line = [&](const std::wstring& s, D2D1_COLOR_F c = RGBA(1, 1, 1)) { R->Text(s, rx + 30, y, rw - 60, 26, 16, c); y += 30; };
+    float y = ry + 124;
+    auto line = [&](const std::wstring& s, D2D1_COLOR_F c = RGBA(0.18f, 0.13f, 0.1f)) { R->Text(s, rx + 34, y, rw - 68, 26, 16, c, 0, true, false); y += 30; };
+    float rh0 = rh;
+    ry += 38; rh = rh0 - 60;   // 操作方法のページは見出しの下から
     switch (townSel)
     {
     case 2:
     {
         const wchar_t* n[ITEM_N] = { L"薬草", L"灯油", L"研ぎ粉", L"帰り糸", L"繕い糸" };
         for (int i = 0; i < ITEM_N; i++) { swprintf_s(buf, L"%s　×%d", n[i], items[i]); line(buf); }
-        swprintf_s(buf, L"お金　%d 文　　ほつれ糸　%d 本", money, threads); line(buf, RGBA(1, 0.85f, 0.4f));
-        swprintf_s(buf, L"アタッチメント：硬い石×%d　火の欠片×%d　軽い羽×%d　鋼糸×%d", attInv[0], attInv[1], attInv[2], attInv[3]); line(buf, RGBA(0.8f, 0.95f, 1));
+        swprintf_s(buf, L"お金　%d 文　　ほつれ糸　%d 本", money, threads); line(buf, RGBA(0.62f, 0.3f, 0.08f));
+        swprintf_s(buf, L"アタッチメント：硬い石×%d　火の欠片×%d　軽い羽×%d　鋼糸×%d", attInv[0], attInv[1], attInv[2], attInv[3]); line(buf, RGBA(0.15f, 0.28f, 0.55f));
         int nParts = 0, nSubs = 0;
         for (int i = 0; i < P_COUNT; i++) nParts += inventory[i];
         for (int i = 0; i < S_COUNT; i++) nSubs += subInv[i];
-        swprintf_s(buf, L"手持ちのジオラマパーツ　%d 個／はめ込みパーツ　%d 個", nParts, nSubs); line(buf, RGBA(0.7f, 1, 0.8f));
+        swprintf_s(buf, L"手持ちのジオラマパーツ　%d 個／はめ込みパーツ　%d 個", nParts, nSubs); line(buf, RGBA(0.18f, 0.45f, 0.3f));
         break;
     }
     case 3:
@@ -364,14 +417,14 @@ void Game::DrawTownMenu()
             DrawFaceIcon(i, rx + 54, y + 20, 18);
             if (joined[i]) swprintf_s(buf, L"%s　HP %d/%d　%s", Def(party[i]).name, (int)party[i].hp, (int)party[i].maxHp, kWeapons[weapons[party[i].weapon].def].name);
             else swprintf_s(buf, L"？？？　（%s）", i == 1 ? L"炭焼き窯を完成させ、そばに行くと仲間になる" : L"水車を完成させ、そばに行くと仲間になる");
-            R->Text(buf, rx + 84, y + 8, rw - 110, 26, 16, joined[i] ? RGBA(1, 1, 1) : RGBA(1, 1, 1, 0.5f));
+            R->Text(buf, rx + 84, y + 8, rw - 110, 26, 16, joined[i] ? ink : inkSoft, 0, true, false);
             y += 50;
         }
         line(L"町を歩くのはソラだけ。仲間は仕事場のそばにいる");
         break;
     case 4:
     {
-        swprintf_s(buf, L"復興率 %d%%", (int)std::round(RestoreRate() * 100)); line(buf, RGBA(1, 0.85f, 0.4f));
+        swprintf_s(buf, L"復興率 %d%%", (int)std::round(RestoreRate() * 100)); line(buf, RGBA(0.62f, 0.3f, 0.08f));
         int got = 0, all = 0;
         for (int f = 1; f <= MAX_FLOOR; f++) { all += LootTotal(f); got += LootTotal(f) - LootLeft(f); }
         swprintf_s(buf, L"集めたジオラマパーツ　%d / %d", got, all); line(buf);
@@ -383,16 +436,16 @@ void Game::DrawTownMenu()
             bool present = false;
             for (auto& p : placed) if (p.t == kReqs[r].owner) present = true;
             swprintf_s(buf, L"%s %s：%s", ReqSatisfied(r) ? L"✓" : L"○", present ? kReqs[r].who : L"？？？", present ? kReqs[r].text : L"（まだ村に戻っていない）");
-            line(buf, ReqSatisfied(r) ? RGBA(0.6f, 1, 0.6f) : RGBA(1, 1, 1, present ? 0.9f : 0.45f));
+            line(buf, ReqSatisfied(r) ? RGBA(0.18f, 0.45f, 0.2f) : RGBA(0.18f, 0.13f, 0.1f, present ? 0.95f : 0.45f));
         }
-        if (VillageComplete()) line(Done(EV_TREE) ? L"村は完成した！" : L"村がすべてそろった！ 御神木の前へ行こう", RGBA(1, 0.85f, 0.4f));
+        if (VillageComplete()) line(Done(EV_TREE) ? L"村は完成した！" : L"村がすべてそろった！ 御神木の前へ行こう", RGBA(0.62f, 0.3f, 0.08f));
         break;
     }
     case 5:
-        DrawControlsPage(townPage, rx + 24, ry + 56, rw - 48, rh - 70);
+        DrawControlsPage(townPage, rx + 30, ry + 84, rw - 60, rh - 100, true);
         break;
     default:
-        line(L"W/S：選ぶ　Enter/E：決定　Esc：閉じる", RGBA(1, 1, 1, 0.7f));
+        line(L"W/S：選ぶ　Enter/E：決定　Esc：閉じる", inkSoft);
         break;
     }
 }
@@ -418,8 +471,7 @@ void Game::DrawTownAsk()
     float W = (float)R->W, H = (float)R->H;
     R->FillRect(0, 0, W, H, RGBA(0, 0, 0, 0.45f));
     float bw = 520, bh = townAsk == 1 ? 210.f : 260.f, bx = (W - bw) / 2, by = (H - bh) / 2;
-    R->FillRound(bx, by, bw, bh, 16, RGBA(0.06f, 0.09f, 0.17f, 0.97f));
-    R->StrokeRound(bx + 5, by + 5, bw - 10, bh - 10, 12, RGBA(0.85f, 0.6f, 0.25f), 2);
+    InkPanel(bx, by, bw, bh, 0.97f);
     R->Text(townAsk == 1 ? L"セーブしました。ゲームを続けますか？" : L"ゲームを終了します。セーブしますか？", bx, by + 22, bw, 30, 20, RGBA(1, 0.92f, 0.75f), 1, true);
     const wchar_t* opt1[2] = { L"はい（続ける）", L"いいえ（タイトル画面へ）" };
     const wchar_t* opt2[3] = { L"セーブして終了する", L"セーブせずに終了する", L"やめる" };
@@ -428,15 +480,15 @@ void Game::DrawTownAsk()
     {
         float y = by + 70 + i * 50.f;
         bool sel = askSel == i;
-        R->FillRound(bx + 60, y, bw - 120, 40, 10, sel ? RGBA(0.98f, 0.94f, 0.85f) : RGBA(1, 1, 1, 0.07f));
-        R->Text(townAsk == 1 ? opt1[i] : opt2[i], bx + 60, y + 8, bw - 120, 26, 18, sel ? RGBA(0.12f, 0.15f, 0.25f) : RGBA(1, 1, 1), 1, true, !sel);
+        InkRow(bx + 60, y, bw - 120, 40, sel);
+        R->Text(townAsk == 1 ? opt1[i] : opt2[i], bx + 60, y + 8, bw - 120, 26, 18, sel ? RGBA(0.16f, 0.12f, 0.1f) : RGBA(1, 1, 1), 1, true, !sel);
     }
 }
 
 // ------------------------------------------------------------------
 // 操作方法のページ（0=ジオラマ配置 1=町を歩く 2=ダンジョン探索）。村のメニューと洞のメニューで使う
 // ------------------------------------------------------------------
-void Game::DrawControlsPage(int page, float x, float y, float w, float h)
+void Game::DrawControlsPage(int page, float x, float y, float w, float h, bool onPaper)
 {
     struct Row { const wchar_t* key; const wchar_t* act; };
     static const Row place[] = {
@@ -482,16 +534,17 @@ void Game::DrawControlsPage(int page, float x, float y, float w, float h)
     for (int i = 0; i < 3; i++)
     {
         float tw = (w - 20) / 3, tx = x + i * (tw + 10);
-        R->FillRound(tx, y, tw, 30, 15, i == page ? RGBA(0.85f, 0.55f, 0.2f) : RGBA(1, 1, 1, 0.08f));
+        InkTab(tx, y, tw, 30, i == page);
         R->Text(titles[i], tx, y + 5, tw, 22, 14, RGBA(1, 1, 1, i == page ? 1.f : 0.65f), 1, i == page, false);
     }
     float rowH = std::min(34.f, (h - 50) / n);
     for (int i = 0; i < n; i++)
     {
         float ry = y + 44 + i * rowH;
-        R->FillRound(x, ry, 190, rowH - 6, 8, RGBA(0.95f, 0.9f, 0.78f, 0.95f));
-        R->Text(rows[i].key, x, ry + (rowH - 6) * 0.5f - 10, 190, 22, 14, RGBA(0.15f, 0.15f, 0.25f), 1, true, false);
-        R->Text(rows[i].act, x + 204, ry + (rowH - 6) * 0.5f - 10, w - 210, 22, 14, RGBA(1, 1, 1, 0.92f));
+        R->FillRect(x, ry, 190, rowH - 6, onPaper ? RGBA(0.14f, 0.11f, 0.1f, 0.92f) : RGBA(0.95f, 0.92f, 0.84f, 0.95f)); R->FillRect(x, ry, 4, rowH - 6, RGBA(0.72f, 0.2f, 0.16f));
+        R->Text(rows[i].key, x, ry + (rowH - 6) * 0.5f - 10, 190, 22, 14, onPaper ? RGBA(0.98f, 0.94f, 0.86f) : RGBA(0.15f, 0.15f, 0.25f), 1, true, false);
+        R->Text(rows[i].act, x + 204, ry + (rowH - 6) * 0.5f - 10, w - 210, 22, 14, onPaper ? RGBA(0.18f, 0.13f, 0.1f) : RGBA(1, 1, 1, 0.92f), 0, onPaper, !onPaper);
+        if (onPaper) R->DashedLine(x + 200, ry + rowH - 4, x + w, ry + rowH - 4, RGBA(0.5f, 0.38f, 0.28f, 0.25f), 1.f);
     }
 }
 

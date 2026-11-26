@@ -201,6 +201,7 @@ void Game::RenderInterior()
     fs.clear = F3(0.11f, 0.08f, 0.07f);
     fs.fogColor = fs.clear; fs.fogStart = 100; fs.fogEnd = 200; fs.fogMax = 0;
     fs.ambient = F3(0.55f, 0.5f, 0.48f);
+    fs.shadowColor = F3(0.9f, 0.78f, 0.75f);   // 室内は暖かい赤茶の影
     fs.lightDir = F3(0.3f, -1.f, 0.6f);
     fs.lightColor = F3(0.6f, 0.55f, 0.5f);
     fs.time = time;
@@ -365,8 +366,7 @@ void Game::DrawShopUI()
 {
     float W = (float)R->W, H = (float)R->H;
     float bw = 620, bh = 470, bx = W - bw - 40, by = (H - bh) / 2;
-    R->FillRound(bx, by, bw, bh, 16, RGBA(0.06f, 0.09f, 0.17f, 0.95f));
-    R->StrokeRound(bx + 5, by + 5, bw - 10, bh - 10, 12, RGBA(0.85f, 0.6f, 0.25f), 2);
+    InkPanel(bx, by, bw, bh, 0.95f);
     R->Text(L"よろず屋（タヌキの商人）", bx + 24, by + 18, 400, 30, 22, RGBA(1, 0.92f, 0.75f), 0, true);
     wchar_t buf[96];
     swprintf_s(buf, L"所持金 %d 文", money);
@@ -375,10 +375,10 @@ void Game::DrawShopUI()
     {
         float y = by + 66 + i * 50.f;
         bool sel = shopSel == i;
-        R->FillRound(bx + 20, y, bw - 40, 42, 10, sel ? RGBA(0.98f, 0.94f, 0.85f) : RGBA(1, 1, 1, 0.06f));
-        D2D1_COLOR_F tc = sel ? RGBA(0.12f, 0.15f, 0.25f) : RGBA(1, 1, 1);
+        InkRow(bx + 20, y, bw - 40, 42, sel);
+        D2D1_COLOR_F tc = sel ? RGBA(0.16f, 0.12f, 0.1f) : RGBA(1, 1, 1);
         R->Text(kShop[i].name, bx + 36, y + 9, 140, 28, 18, tc, 0, true, !sel);
-        R->Text(kShop[i].desc, bx + 160, y + 11, 300, 26, 15, sel ? RGBA(0.3f, 0.35f, 0.45f) : RGBA(1, 1, 1, 0.7f), 0, false, !sel);
+        R->Text(kShop[i].desc, bx + 160, y + 11, 300, 26, 15, sel ? RGBA(0.42f, 0.34f, 0.28f) : RGBA(1, 1, 1, 0.7f), 0, false, !sel);
         int have = kShop[i].item >= 0 ? items[kShop[i].item] : attInv[kShop[i].att];
         swprintf_s(buf, L"%d 文（所持 %d）", kShop[i].price, have);
         R->Text(buf, bx + bw - 220, y + 10, 180, 26, 15, sel ? RGBA(0.75f, 0.4f, 0.1f) : RGBA(1, 0.85f, 0.4f), 2, true, !sel);
@@ -390,15 +390,12 @@ void Game::DrawInteriorUI()
 {
     float W = (float)R->W, H = (float)R->H;
     std::wstring name = roomPart >= 0 && roomPart < (int)placed.size() ? kParts[placed[roomPart].t].name : L"";
-    R->FillRound(18, 16, 340, 64, 12, RGBA(0.06f, 0.08f, 0.15f, 0.78f));
+    InkPanel(18, 16, 340, 64, 0.78f);
     R->Text(name, 34, 22, 300, 30, 22, RGBA(1, 0.92f, 0.75f), 0, true);
     R->Text(std::wstring(L"部屋の様子：") + kPatternName[roomPattern], 34, 52, 300, 24, 14, RGBA(1, 1, 1, 0.75f));
     if (!talkHint.empty() && dialog.empty() && !shopOpen)
     {
-        R->FillRound(W / 2 - 170, H - 120, 340, 42, 21, RGBA(0.05f, 0.07f, 0.13f, 0.8f));
-        R->Text(talkHint, W / 2 - 170, H - 112, 340, 30, 18, RGBA(1, 0.92f, 0.7f), 1, true);
+        DrawInkHint(talkHint, W / 2, H - 120, 380);
     }
     if (shopOpen) DrawShopUI();
-    R->FillRect(0, H - 32, W, 32, RGBA(0.04f, 0.05f, 0.1f, 0.6f));
-    R->Text(L"WASD 移動　Shift ダッシュ　E 話す／調べる　手前の出口から外へ", 0, H - 28, W, 24, 14, RGBA(1, 1, 1, 0.85f), 1, false, false);
 }

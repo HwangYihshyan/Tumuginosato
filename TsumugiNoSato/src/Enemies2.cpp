@@ -110,6 +110,12 @@ void Game::DrawPillarBars()
         if (!p.alive || p.grow < 0.99f) continue;
         float sx, sy;
         if (!R->Project(Add(p.pos, F3(0, 5.8f, 0)), sx, sy)) continue;
+        // 画面上のほうの UI（左のキャラ・仲間・お金の欄、上のボスの体力、右上の地図）に重なるときは出さない
+        //   残りの本数はボスの体力の下の「守り：糸の柱 n/4 本」でわかる
+        float W = (float)R->W;
+        if (sx < 500.f && sy < 300.f) continue;
+        if (sx > W - 260.f && sy < 290.f) continue;
+        if (sy < 100.f) continue;
         Bar(sx - 40, sy, 80, 8, p.hp / p.maxHp, RGBA(0.55f, 0.65f, 1.f), RGBA(0.1f, 0.1f, 0.15f, 0.85f));
     }
 }

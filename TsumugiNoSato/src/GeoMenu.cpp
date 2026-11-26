@@ -400,12 +400,7 @@ void Game::DrawGeoMenu()
             }
         }
         const wchar_t* mode = moving ? L"移動中（クリックでここへ移動／もう一度 X・右クリックで片付け）" : carrySub >= 0 ? L"はめ込み中（W/S：カード　A/D：枠　Enter：はめる）" : geoFocus == 0 ? L"メニューを操作中（Enter で決定）" : L"マップを操作中（Esc でメニューへ）";
-        R->FillRound(W / 2 - 230, H - 76, 460, 34, 17, geoFocus == 0 ? RGBA(0.1f, 0.2f, 0.35f, 0.85f) : RGBA(0.35f, 0.22f, 0.08f, 0.85f));
-        R->Text(mode, W / 2 - 230, H - 70, 460, 24, 15, RGBA(1, 0.95f, 0.8f), 1, true);
+        InkPanel(W / 2 - 230, H - 60, 460, 34, 0.88f);
+        R->Text(mode, W / 2 - 230, H - 54, 460, 24, 15, RGBA(1, 0.95f, 0.8f), 1, true);
     }
-    R->FillRect(0, H - 32, W, 32, RGBA(0.04f, 0.05f, 0.1f, 0.75f));
-    R->Text(moving ? L"【移動中】WASD・マウス：カーソル　Enter/Space・クリック：ここへ移動　R：回転　X/右クリック：片付け　Esc：やめる（元の場所へ）"
-          : geoFocus == 0 ? L"【メニュー】W/S：選ぶ　A/D：左右の欄　Enter/Space：決定　Esc：町へ　Z/C：選ぶ　Q/E：視点　Tab：その場所へ移動して町を歩く"
-                          : L"【マップ】WASD：カーソル　Enter/Space・クリック：置く　R：回転　X/右クリック：移動　Esc：メニューへ　F：建物へ　Q/E：視点　Tab：町を歩く",
-            0, H - 28, W, 24, 13, RGBA(1, 1, 1, 0.85f), 1, false, false);
 }

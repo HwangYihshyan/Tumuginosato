@@ -1291,6 +1291,7 @@ void Game::RenderVillage(bool title)
     fs.lightDir = F3(-0.45f, -1.f, 0.4f);
     fs.lightColor = Lerp3(F3(0.7f, 0.72f, 0.78f), F3(1.0f, 0.88f, 0.72f), rate);
     fs.ambient = Lerp3(F3(0.58f, 0.6f, 0.66f), F3(0.52f, 0.5f, 0.55f), rate);
+    fs.shadowColor = Lerp3(F3(0.82f, 0.86f, 1.0f), F3(0.88f, 0.8f, 0.95f), rate);   // 霧の村は青い影、復興すると夕焼けの紫の影
     fs.fogColor = Lerp3(F3(0.80f, 0.83f, 0.87f), F3(0.95f, 0.82f, 0.68f), rate);
     fs.fogStart = Lerpf(title ? 4.f : 14.f, 45, rate);
     fs.fogEnd = Lerpf(title ? 48.f : 62.f, 180, rate);
@@ -1484,28 +1485,66 @@ void Game::DrawVillageUI()
     float rate = rateShown;
     if (vWalkCam)
     {
-        wchar_t b0[96]; swprintf_s(b0, L"ハタオリ村　復興率 %d%%　　%d 文", (int)std::round(rate * 100), money);
-        R->FillRound(18, 16, 340, 44, 12, RGBA(0.06f, 0.08f, 0.15f, 0.7f));
-        R->Text(b0, 18, 25, 340, 30, 19, RGBA(1, 0.92f, 0.75f), 1, true);
-        float fx0 = 380;
+        if (!townMenu)   // 村のメニューを開いているあいだは、題字と重ならないように出さない
+        {
+        // 左上：機織りの村らしく、復興率は「織りかけの反物」で見せる
+        //   織れたところは色のついた布、まだのところは縦糸だけ。織っている端に杼（ひ）がいる
+        wchar_t b0[64];
+        R->FillGradientRect(0, 0, 520, 96, RGBA(0.04f, 0.03f, 0.03f, 0.6f), RGBA(0.04f, 0.03f, 0.03f, 0.f));
+        // 朱の判と村の名前
+        R->FillRect(20, 16, 44, 44, RGBA(0.75f, 0.2f, 0.16f));
+        R->StrokeRect(23, 19, 38, 38, RGBA(1, 0.9f, 0.8f, 0.8f), 1.5f);
+        R->Text(L"紡", 20, 20, 44, 40, 27, RGBA(1, 0.96f, 0.9f), 1, true, false, 1);
+        R->Text(L"ハタオリ村", 74, 10, 220, 34, 24, RGBA(1, 0.97f, 0.9f), 0, true, true, 1);
+        // 織りかけの反物
+        {
+            float cx0 = 76, cy0 = 46, cw = 200, ch = 14;
+            float wv = cw * Saturate(rate);
+            R->FillRect(cx0 - 3, cy0 - 3, 3, ch + 6, RGBA(0.42f, 0.27f, 0.16f));            // 織り始めの木の棒
+            R->FillRect(cx0, cy0, cw, ch, RGBA(0.05f, 0.04f, 0.04f, 0.45f));
+            for (float x = cx0 + 2; x < cx0 + cw; x += 4)                                    // 縦糸
+                R->Line(x, cy0, x, cy0 + ch, RGBA(0.95f, 0.9f, 0.8f, 0.45f), 1.f);
+            if (wv > 0.5f)
+            {
+                R->FillRect(cx0, cy0, wv, ch, RGBA(0.22f, 0.32f, 0.62f));                      // 藍の布
+                R->FillRect(cx0, cy0 + 4, wv, 2, RGBA(0.75f, 0.22f, 0.2f));                     // 朱と山吹の縞
+                R->FillRect(cx0, cy0 + 9, wv, 1.5f, RGBA(0.88f, 0.64f, 0.22f));
+                for (float x = cx0 + 3; x < cx0 + wv; x += 6)                                  // 織り目
+                    R->Line(x, cy0, x, cy0 + ch, RGBA(1, 1, 1, 0.08f), 1.f);
+                R->FillRect(cx0, cy0, wv, 2, RGBA(1, 1, 1, 0.18f));
+            }
+            // 杼：織っている端で小さくゆれる
+            float sx = cx0 + wv, sy = cy0 + ch * 0.5f + std::sin(time * 3.f) * 1.5f;
+            D2D1_POINT_2F sh[4] = { { sx - 9, sy }, { sx, sy - 5 }, { sx + 9, sy }, { sx, sy + 5 } };
+            R->FillPoly(sh, 4, RGBA(0.62f, 0.42f, 0.24f));
+            R->StrokePoly(sh, 4, RGBA(0.25f, 0.15f, 0.09f), 1.f);
+            swprintf_s(b0, L"復興 %d%%", (int)std::round(rate * 100));
+            R->Text(b0, cx0 + cw + 12, cy0 - 7, 100, 26, 16, RGBA(1, 0.92f, 0.78f), 0, true, true, 1);
+        }
+        // お金：穴あき銭
+        {
+            float mx = 88, my = 76;
+            R->FillCircle(mx, my, 9, RGBA(0.85f, 0.65f, 0.25f));
+            R->StrokeCircle(mx, my, 9, RGBA(0.45f, 0.3f, 0.1f), 1.2f);
+            R->FillRect(mx - 3, my - 3, 6, 6, RGBA(0.2f, 0.14f, 0.08f));
+            swprintf_s(b0, L"%d 文", money);
+            R->Text(b0, mx + 16, my - 13, 140, 26, 17, RGBA(1, 0.92f, 0.78f), 0, true, true, 1);
+        }
+        // 仲間の顔（操作しているキャラは朱の輪）
+        float fx0 = 400;
         for (int i = 0; i < 3; i++)
         {
             if (!joined[i]) continue;
-            DrawFaceIcon(i, fx0, 38, 18);
-            R->StrokeCircle(fx0, 38, 18, i == active ? RGBA(0.9f, 0.65f, 0.3f) : RGBA(1, 1, 1, 0.5f), 2);
-            fx0 += 44;
+            R->FillCircle(fx0, 38, 20, RGBA(0.97f, 0.94f, 0.87f));
+            DrawFaceIcon(i, fx0, 38, 17);
+            R->StrokeCircle(fx0, 38, 20, i == active ? RGBA(0.78f, 0.22f, 0.17f) : RGBA(1, 1, 1, 0.75f), i == active ? 3.f : 2.f);
+            fx0 += 46;
         }
-        std::wstring goal = TownGoal();
-        R->FillRound(W / 2 - 300, 70, 600, 34, 17, RGBA(0.05f, 0.07f, 0.13f, 0.65f));
-        R->Text(L"目標：" + goal, W / 2 - 300, 76, 600, 26, 16, RGBA(1, 0.92f, 0.7f), 1, true);
+        }
         if (!talkHint.empty() && dialog.empty() && !transOn && !floorMenu)
         {
-            R->FillRound(W / 2 - 170, H - 120, 340, 42, 21, RGBA(0.05f, 0.07f, 0.13f, 0.8f));
-            R->Text(talkHint, W / 2 - 170, H - 112, 340, 30, 18, RGBA(1, 0.92f, 0.7f), 1, true);
+            DrawInkHint(talkHint, W / 2, H - 120, 380);
         }
-        R->FillRect(0, H - 32, W, 32, RGBA(0.04f, 0.05f, 0.1f, 0.6f));
-        R->Text(L"町を歩く　WASD 移動　Shift ダッシュ　マウス カメラ　E 話す／入る　Tab 配置・はめ込み　Esc メニュー（セーブ）",
-                0, H - 28, W, 24, 14, RGBA(1, 1, 1, 0.85f), 1, false, false);
         if (floorMenu && dialog.empty() && !transOn) DrawFloorMenu();
         return;
     }
@@ -1536,8 +1575,7 @@ void Game::DrawVillageUI()
             float tw = std::max(150.f, 28.f + name.size() * 20.f), th = 36;
             float sw = slots.empty() ? 0.f : std::max(tw, 30.f + slots.size() * 15.f);
             float bwid = std::max(tw, sw);
-            R->FillRound(sx - bwid / 2, sy - th - 6, bwid, slots.empty() ? th : th + 26, 12, RGBA(0.05f, 0.07f, 0.13f, 0.85f));
-            R->StrokeRound(sx - bwid / 2, sy - th - 6, bwid, slots.empty() ? th : th + 26, 12, RGBA(0.9f, 0.65f, 0.3f), 2);
+            InkPanel(sx - bwid / 2, sy - th - 6, bwid, slots.empty() ? th : th + 26, 0.85f);
             R->Text(name, sx - bwid / 2, sy - th, bwid, 28, 18, RGBA(1, 0.92f, 0.75f), 1, true);
             if (!slots.empty()) R->Text(L"はめ込み " + slots, sx - bwid / 2, sy - 10, bwid, 22, 13, RGBA(0.8f, 0.95f, 1), 1);
         }

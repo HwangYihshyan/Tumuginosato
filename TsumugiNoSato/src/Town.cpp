@@ -493,16 +493,15 @@ void Game::DrawFloorMenu()
     int maxF = std::clamp(deepest, 1, MAX_FLOOR);
     float rowH = std::min(40.f, (H - 210) / maxF), bw = 680, bh = 120 + maxF * rowH, bx = (W - bw) / 2, by = (H - bh) / 2 - 10;
     R->FillRect(0, 0, W, H, RGBA(0.02f, 0.03f, 0.06f, 0.45f));
-    R->FillRound(bx, by, bw, bh, 16, RGBA(0.06f, 0.09f, 0.17f, 0.96f));
-    R->StrokeRound(bx + 5, by + 5, bw - 10, bh - 10, 12, RGBA(0.85f, 0.6f, 0.25f), 2);
+    InkPanel(bx, by, bw, bh, 0.96f);
     R->Text(L"根の洞　― 入る階を選ぶ", bx, by + 16, bw, 32, 22, RGBA(1, 0.92f, 0.75f), 1, true);
     for (int i = 0; i < maxF; i++)
     {
         int fl = i + 1;
         float y = by + 62 + i * rowH;
         bool sel = floorSel == i;
-        R->FillRound(bx + 24, y, bw - 48, rowH - 6, 9, sel ? RGBA(0.98f, 0.94f, 0.85f) : RGBA(1, 1, 1, 0.06f));
-        D2D1_COLOR_F tc = sel ? RGBA(0.12f, 0.15f, 0.25f) : RGBA(1, 1, 1);
+        InkRow(bx + 24, y, bw - 48, rowH - 6, sel);
+        D2D1_COLOR_F tc = sel ? RGBA(0.16f, 0.12f, 0.1f) : RGBA(1, 1, 1);
         R->Text(FloorSubtitle(fl), bx + 44, y + rowH * 0.5f - 15, 380, 26, rowH < 36 ? 15.f : 17.f, tc, 0, true, !sel);
         int left = LootLeft(fl), total = LootTotal(fl);
         bool taken = left == 0;

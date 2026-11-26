@@ -212,6 +212,7 @@ public:
     void Render();
 
     bool autoshot = false;
+    bool movie = false;         // --movie：紹介動画の台本を流す（autoshot と同じしくみで自動操作し、main.cpp が毎フレーム録画する）
     std::wstring shotDir;
     std::wstring pendingShot;   // 描画後に保存するファイル名
     bool quit = false;
@@ -358,7 +359,7 @@ private:
     void UpdateTownMenu(const Controls& c);
     void DrawTownMenu();
     void DrawTownAsk();
-    void DrawControlsPage(int page, float x, float y, float w, float h);
+    void DrawControlsPage(int page, float x, float y, float w, float h, bool onPaper = false);   // onPaper：和紙の上（墨の文字）
     // 根の洞の入口：入る階を選ぶメニュー
     bool floorMenu = false; int floorSel = 0;
     void UpdateFloorMenu(const Controls& c);
@@ -593,6 +594,14 @@ private:
     float stepT = 0;
     void BuildShotScript();
     void UpdateDirector(float dt);
+    // ---- 紹介動画（--movie）
+    //   台本は steps（撮影デモと同じ）。字幕と、最初と最後の題字カードは DrawMovieOverlay で画面に重ねる
+    void BuildMovieScript();
+    void DrawMovieOverlay();
+    int movieCard = 0; float movieCardT = 0;          // 題字カード：0=なし 1=始まり 2=終わり、出てからの時間
+    std::wstring movieNo, movieTitle, movieSub;       // 字幕：番号・見出し・説明
+    float movieCapT = 99, movieCapDur = 0;            // 字幕が出てからの時間・出しておく長さ
+    std::function<void(float)> movieTick;             // 毎フレーム呼ぶ（カメラをゆっくり回すなど）
     void TeleportPartyNear(XMFLOAT3 p, XMFLOAT3 lookAt);
 
     // ---- HUD 部品
@@ -600,4 +609,12 @@ private:
     void DrawDialog();
     void DrawToasts();
     void DrawFaceIcon(int def, float cx, float cy, float r);
+    void DrawInkHint(const std::wstring& s, float cx, float y, float w);   // 操作のヒント（墨の帯）
+    // UI の共通の形（和紙と墨）：墨の板（大きい板は内側に縫い目）／選べる行（選ぶと和紙の札）
+    void InkPanel(float x, float y, float w, float h, float a = 0.9f);
+    void InkRow(float x, float y, float w, float h, bool sel);
+    void InkTab(float x, float y, float w, float h, bool on);   // タブ：選ぶと朱の平行四辺形
+    // 斜めのゲージ（アニメ風の HUD）。trail：減ったぶんを遅れて追いかける白い帯（負なら出さない）
+    void SlantBar(float x, float y, float w, float h, float v, D2D1_COLOR_F fill, D2D1_COLOR_F back, float trail = -1.f);
+    float hpTrail = 1.f, hpTrailTime = 0.f;   // HP の白い帯の位置と、前に描いた時刻
 };

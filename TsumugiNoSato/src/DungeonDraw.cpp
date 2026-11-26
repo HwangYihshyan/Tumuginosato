@@ -20,6 +20,7 @@ void Game::RenderDungeon()
     fs.fogEnd = Lerpf(12.f, deep ? 26.f : 32.f, SmoothStep(0.f, 0.5f, lk));
     fs.fogMax = 1.f;
     fs.ambient = deep ? F3(0.27f, 0.24f, 0.38f) : F3(0.3f, 0.34f, 0.44f);
+    fs.shadowColor = deep ? F3(0.62f, 0.48f, 1.0f) : F3(0.52f, 0.68f, 1.0f);   // 洞の影は青紫に（強め）
     fs.lightDir = F3(0.35f, -1.f, 0.5f);
     fs.lightColor = deep ? F3(0.42f, 0.4f, 0.62f) : F3(0.45f, 0.52f, 0.66f);
     Actor& A = party[active];
@@ -340,46 +341,120 @@ void Game::DrawDungeonUI()
         R->Text(std::to_wstring(n.val), sx - 60, sy - s * 0.6f, 120, s * 1.3f, s, c, 1, true, true);
     }
 
-    // 左上：ステータス
-    R->FillRound(16, 14, 410, 150, 12, RGBA(0.05f, 0.07f, 0.13f, 0.78f));
-    DrawFaceIcon(A.def, 52, 52, 26);
-    R->StrokeCircle(52, 52, 26, RGBA(0.9f, 0.65f, 0.3f), 2.5f);
-    R->Text(d.name, 88, 20, 150, 30, 21, RGBA(1, 0.95f, 0.85f), 0, true);
-    swprintf_s(buf, L"HP %d / %d", (int)std::ceil(A.hp), (int)A.maxHp);
-    R->Text(buf, 260, 23, 150, 24, 14, RGBA(1, 1, 1, 0.85f), 2);
-    float hk = A.hp / A.maxHp;
-    Bar(88, 50, 320, 13, hk, hk > 0.35f ? RGBA(0.45f, 0.85f, 0.45f) : RGBA(0.95f, 0.35f, 0.3f), RGBA(0.15f, 0.15f, 0.2f, 0.9f));
-    R->Text(L"灯", 88, 72, 24, 24, 15, RGBA(1, 0.8f, 0.4f), 0, true);
-    float blink = lantern < 25 ? 0.6f + 0.4f * std::sin(time * 8) : 1.f;
-    Bar(110, 78, 298, 11, lantern / 100.f, RGBA(1.f, 0.7f, 0.25f, blink), RGBA(0.15f, 0.15f, 0.2f, 0.9f));
+    // 左上：ステータス（アニメ風）
+    //   大きな顔を朱の斜め板の上に置き、名前・Lv・斜めのゲージを右に並べる。板はなく、左から暗くなるグラデーションだけ
+    //   並び（x 座標）：顔 8〜132 ｜ 名前・HP・灯・武器 136〜460。ボスの体力はこの右（490〜）に出す
+    //   並び（y 座標）：名前 14 ／ HP 50 ／ 灯 80 ／ 武器 100 ／ 耐久 130 ／ 経験 141 ／ 控えの仲間 168〜 ／ お金
+    float hk = Saturate(A.hp / A.maxHp);
+    {
+        // HP の白い帯（ダメージの見える化）
+        //   hpTrail は「少し前の HP」。HP が減っても hpTrail はすぐには下がらず、1秒に 40% の速さで追いかける。
+        //   そのあいだ SlantBar が v〜hpTrail を白く塗るので、どれだけ削られたかが目で追える。
+        //   回復したときは帯を出さず、すぐに hpTrail をそろえる。
+        //   この関数は描画なので dt がない。前に描いた時刻（hpTrailTime）との差を使う（メニュー中などで間があいても 0.1 秒まで）
+        float udt = std::clamp(time - hpTrailTime, 0.f, 0.1f);
+        hpTrailTime = time;
+        hpTrail = hk > hpTrail ? hk : std::max(hk, hpTrail - udt * 0.4f);
+    }
+    bool danger = hk <= 0.3f;
+    R->FillGradientRect(0, 6, 480, 150, RGBA(0.03f, 0.03f, 0.05f, 0.72f), RGBA(0.03f, 0.03f, 0.05f, 0.f));
+    // 攻撃を受けると顔がゆれる：A.flash（受けた直後に 1 → だんだん 0）の大きさで、左右に細かくふるわせる
+    float shk = A.flash > 0.05f ? std::sin(time * 90.f) * 4.f * A.flash : 0.f;
+    {
+        // 朱の斜め板（ピンチのときは赤く脈打つ）
+        float pulse = danger ? 0.5f + 0.5f * std::sin(time * 8.f) : 0.f;
+        D2D1_COLOR_F plate = RGBA(0.72f + 0.2f * pulse, 0.2f, 0.16f, 0.95f);
+        D2D1_POINT_2F pl[4] = { { 30, 18 }, { 132, 18 }, { 110, 132 }, { 8, 132 } };
+        D2D1_POINT_2F ps[4]; for (int i = 0; i < 4; i++) ps[i] = { pl[i].x + 5, pl[i].y + 5 };
+        R->FillPoly(ps, 4, RGBA(0, 0, 0, 0.4f));
+        R->FillPoly(pl, 4, plate);
+        R->Line(36, 26, 18, 124, RGBA(1, 0.9f, 0.75f, 0.5f), 1.5f);           // 板のふちの光
+        float fx = 70 + shk, fy = 74;
+        R->FillCircle(fx, fy, 50, RGBA(0.97f, 0.94f, 0.87f));
+        DrawFaceIcon(A.def, fx, fy, 44);
+        R->StrokeCircle(fx, fy, 50, RGBA(1, 1, 1), 4.f);
+        R->StrokeCircle(fx, fy, 53, RGBA(0.1f, 0.08f, 0.09f), 1.5f);
+    }
+    // 名前と Lv（Lv の札は名前のすぐ右。全角1文字 ≒ 25px として名前の長さから位置を決める）
+    R->Text(d.name, 136, 14, 200, 34, 25, RGBA(1, 0.97f, 0.9f), 0, true, true);
+    float lvx = 140 + 25.f * (float)wcslen(d.name);
+    InkTab(lvx, 22, 58, 22, true);
+    swprintf_s(buf, L"Lv%d", A.lvl);
+    R->Text(buf, lvx + 4, 23, 52, 20, 14, RGBA(1, 0.95f, 0.85f), 1, true, false);
+    // HP：大きな数字と斜めのゲージ
+    swprintf_s(buf, L"%d", (int)std::ceil(A.hp));
+    R->Text(buf, 300, 12, 96, 36, 28, danger ? RGBA(1, 0.45f, 0.4f) : RGBA(1, 1, 1), 2, true, true);
+    swprintf_s(buf, L"/%d", (int)A.maxHp);
+    R->Text(buf, 398, 24, 60, 22, 14, RGBA(1, 1, 1, 0.75f), 0, true, true);
+    SlantBar(136, 50, 310, 18, hk, danger ? RGBA(0.95f, 0.32f, 0.28f) : RGBA(0.42f, 0.86f, 0.5f), RGBA(0.1f, 0.09f, 0.11f, 0.9f), hpTrail);
+    // 灯：炎の印と細いゲージ
+    {
+        float blink = lantern < 25 ? 0.6f + 0.4f * std::sin(time * 8) : 1.f;
+        float fl = std::sin(time * 9.f) * 1.2f;
+        D2D1_POINT_2F fp[3] = { { 140 + fl, 74 }, { 148, 92 }, { 132, 92 } };
+        R->FillPoly(fp, 3, RGBA(1, 0.6f, 0.2f, blink));
+        R->FillCircle(140, 90, 6.5f, RGBA(1, 0.6f, 0.2f, blink));
+        R->FillCircle(140, 90, 3.f, RGBA(1, 0.95f, 0.7f, blink));
+        SlantBar(154, 80, 260, 10, lantern / 100.f, RGBA(1.f, 0.72f, 0.25f, blink), RGBA(0.1f, 0.09f, 0.11f, 0.85f));
+    }
+    // 武器：墨の札に名前と耐久、その下に耐久と経験の細いゲージ
     float dk = A.maxDur > 0 ? A.dur / A.maxDur : 0;
     D2D1_COLOR_F wc = RGBA(0.85f, 0.9f, 1);
     if (!A.broken && dk <= 0.1f) wc = RGBA(1, 0.3f, 0.25f, 0.55f + 0.45f * std::sin(time * 12));
     else if (!A.broken && dk <= 0.25f) wc = RGBA(1, 0.85f, 0.25f);
-    swprintf_s(buf, L"%s  Lv%d", A.broken ? d.spare : kWeapons[ow.def].name, A.lvl);
-    R->Text(buf, 24, 100, 260, 24, 16, A.broken ? RGBA(0.7f, 0.7f, 0.75f) : kWeapons[ow.def].element == 1 ? RGBA(1, 0.6f, 0.45f) : kWeapons[ow.def].element == 2 ? RGBA(0.6f, 0.85f, 1) : RGBA(1, 1, 1), 0, true);
-    if (A.broken) R->Text(L"壊れている（繕い糸で直る）", 190, 101, 220, 24, 14, RGBA(1, 0.6f, 0.5f), 2);
-    else { swprintf_s(buf, L"耐久 %d / %d", (int)A.dur, (int)A.maxDur); R->Text(buf, 220, 101, 190, 24, 14, wc, 2, true); }
-    Bar(24, 126, 384, 9, A.broken ? 0.f : dk, wc, RGBA(0.15f, 0.15f, 0.2f, 0.9f));
-    Bar(24, 142, 384, 5, A.exp / (100.f * A.lvl), RGBA(0.55f, 0.75f, 1.f), RGBA(0.15f, 0.15f, 0.2f, 0.9f));
+    {
+        int el = kWeapons[ow.def].element;
+        D2D1_COLOR_F ec = A.broken ? RGBA(0.5f, 0.5f, 0.55f) : el == 1 ? RGBA(1, 0.45f, 0.3f) : el == 2 ? RGBA(0.4f, 0.7f, 1) : RGBA(0.9f, 0.9f, 0.95f);
+        D2D1_POINT_2F wp[4] = { { 136 + 8, 100 }, { 446, 100 }, { 438, 124 }, { 136, 124 } };
+        R->FillPoly(wp, 4, RGBA(0.08f, 0.07f, 0.08f, 0.85f));
+        D2D1_POINT_2F wb[4] = { { 144, 100 }, { 150, 100 }, { 142, 124 }, { 136, 124 } };
+        R->FillPoly(wb, 4, ec);
+        R->Text(A.broken ? d.spare : kWeapons[ow.def].name, 154, 102, 170, 22, 15, ec, 0, true, false);
+        if (A.broken) R->Text(L"壊れている", 300, 103, 130, 22, 13, RGBA(1, 0.6f, 0.5f), 2, true, false);
+        else { swprintf_s(buf, L"耐久 %d/%d", (int)A.dur, (int)A.maxDur); R->Text(buf, 300, 103, 130, 22, 13, wc, 2, true, false); }
+        SlantBar(136, 130, 300, 7, A.broken ? 0.f : dk, wc, RGBA(0.1f, 0.09f, 0.11f, 0.85f));
+        R->FillRect(136, 141, 296, 3, RGBA(0.1f, 0.09f, 0.11f, 0.8f));
+        R->FillRect(136, 141, 296 * Saturate(A.exp / (100.f * A.lvl)), 3, RGBA(0.55f, 0.75f, 1.f));
+    }
 
-    // 控え（画面には出ない仲間）
-    float ry = 172;
+    // 控え（画面には出ない仲間）：小さな丸い顔と斜めのゲージ
+    float ry = 168;
     for (int i = 0; i < 3; i++)
     {
         if (i == active || !joined[i]) continue;
-        R->FillRound(16, ry, 250, 46, 10, RGBA(0.05f, 0.07f, 0.13f, 0.7f));
-        DrawFaceIcon(i, 40, ry + 23, 16);
-        R->Text(std::wstring(Def(party[i]).name) + L"（控え）", 64, ry + 4, 190, 22, 14, RGBA(1, 1, 1, 0.9f), 0, true);
-        Bar(64, ry + 29, 186, 8, party[i].hp / party[i].maxHp, party[i].st == ASt::Down ? RGBA(0.5f, 0.5f, 0.5f) : RGBA(0.45f, 0.85f, 0.45f), RGBA(0.15f, 0.15f, 0.2f, 0.9f));
-        ry += 52;
+        bool down = party[i].st == ASt::Down;
+        R->FillGradientRect(0, ry, 280, 46, RGBA(0.03f, 0.03f, 0.05f, 0.6f), RGBA(0.03f, 0.03f, 0.05f, 0.f));
+        R->FillCircle(42, ry + 23, 21, RGBA(0.97f, 0.94f, 0.87f));
+        DrawFaceIcon(i, 42, ry + 23, 18);
+        if (down) R->FillCircle(42, ry + 23, 21, RGBA(0.1f, 0.1f, 0.12f, 0.55f));
+        R->StrokeCircle(42, ry + 23, 21, RGBA(1, 1, 1, 0.9f), 2.5f);
+        R->Text(Def(party[i]).name, 70, ry + 2, 150, 22, 15, RGBA(1, 1, 1, 0.95f), 0, true, true);
+        SlantBar(70, ry + 27, 170, 8, party[i].hp / party[i].maxHp, down ? RGBA(0.5f, 0.5f, 0.5f) : RGBA(0.42f, 0.86f, 0.5f), RGBA(0.1f, 0.09f, 0.11f, 0.85f));
+        ry += 50;
     }
-    swprintf_s(buf, L"%d 文", money);
-    R->Text(buf, 24, ry + 4, 200, 24, 16, RGBA(1, 0.85f, 0.4f), 0, true);
+    // お金：赤い紐に通した穴あき銭（銭差し）と、明朝の数字
+    {
+        float my = ry + 18;
+        R->FillGradientRect(0, my - 16, 220, 32, RGBA(0.03f, 0.03f, 0.05f, 0.6f), RGBA(0.03f, 0.03f, 0.05f, 0.f));
+        R->Line(18, my, 70, my, RGBA(0.75f, 0.2f, 0.16f), 2.f);                       // 赤い紐
+        R->Line(70, my, 76, my + 7, RGBA(0.75f, 0.2f, 0.16f), 2.f);                   // 紐の結び目の先
+        R->Line(70, my, 77, my - 5, RGBA(0.75f, 0.2f, 0.16f), 2.f);
+        for (int k = 0; k < 3; k++)
+        {
+            float cx = 28 + k * 13.f;
+            R->FillCircle(cx, my, 8.5f, RGBA(0.85f, 0.65f, 0.25f));
+            R->StrokeCircle(cx, my, 8.5f, RGBA(0.42f, 0.28f, 0.1f), 1.2f);
+            R->FillRect(cx - 2.5f, my - 2.5f, 5, 5, RGBA(0.2f, 0.14f, 0.08f));
+        }
+        swprintf_s(buf, L"%d", money);
+        R->Text(buf, 84, my - 15, 90, 30, 21, RGBA(1, 0.95f, 0.85f), 0, true, true, 1);
+        float nw = 12.f * (float)wcslen(buf);
+        R->Text(L"文", 88 + nw, my - 10, 30, 24, 15, RGBA(1, 0.85f, 0.55f), 0, true, true, 1);
+    }
 
     // 右上：ミニマップ
     float ms = (setBigMap ? 290.f : 200.f) / DN, mx0 = W - DN * ms - 18, my0 = 14;   // 設定で地図を大きくできる
-    R->FillRound(mx0 - 8, my0, DN * ms + 16, DN * ms + 56, 10, RGBA(0.05f, 0.07f, 0.13f, 0.78f));
+    InkPanel(mx0 - 8, my0, DN * ms + 16, DN * ms + 56, 0.78f);
     float myb = my0 + 8 + DN * ms;
     for (int x = 0; x < DN; x++)
         for (int z = 0; z < DN; z++)
@@ -416,15 +491,15 @@ void Game::DrawDungeonUI()
     swprintf_s(buf, L"根の洞　%d / %d", floorNo, MAX_FLOOR);
     R->Text(buf, mx0, myb + 8, DN * ms, 26, 17, RGBA(1, 0.92f, 0.75f), 0, true);
     R->Text(hasKey ? L"鍵 ✓" : L"鍵 －", mx0, myb + 10, DN * ms, 24, 15, hasKey ? RGBA(1, 0.85f, 0.4f) : RGBA(1, 1, 1, 0.6f), 2, true);
-    swprintf_s(buf, L"パーツ ×%d　この階 あと%d", crystalsThisRun, LootLeft(floorNo));
-    R->Text(buf, mx0 - 250, my0 + 6, 240, 24, 15, RGBA(0.6f, 0.95f, 1), 2, true);
 
     float topY = 70;   // 上中央の表示は上から順に積む（ボスのHP → 守りの様子 → 目的 → ロックオン）。重ならない
     // ボスのHP
     for (auto& e : enemies)
     {
         if (!IsBossType(e.t) || e.st == ESt::Dead || (e.t == EType::Utsuro && floorNo != 15)) continue;
-        float bw = 420, bx = (W - bw) / 2;   // 左の体力の欄・右上の「パーツ」表示と重ならない幅
+        // 左のキャラの欄（右端 x≒460）と右上の地図（mx0 - 8 から）のあいだに収める
+        const float leftEdge = 490.f, rightEdge = mx0 - 8 - 24;
+        float bw = std::min(420.f, rightEdge - leftEdge), bx = leftEdge + (rightEdge - leftEdge - bw) * 0.5f;
         const wchar_t* nm = e.t == EType::Spider ? L"中ボス　ほつれ蜘蛛" : e.t == EType::Guardian ? L"主　大樹の番人" : e.t == EType::Utsuro ? L"主　うつろ" : L"根の主の腕";
         R->Text(nm, bx, 14, bw, 28, 20, RGBA(1, 0.9f, 0.85f), 1, true);
         Bar(bx, 44, bw, 14, e.hp / e.maxHp, RGBA(0.85f, 0.25f, 0.3f), RGBA(0.1f, 0.08f, 0.12f, 0.85f));
@@ -436,18 +511,10 @@ void Game::DrawDungeonUI()
             wchar_t sb[96];
             if (left > 0) swprintf_s(sb, L"守り：糸の柱 %d / 4 本　― 柱を全部壊すまで攻撃が効かない", left);
             else swprintf_s(sb, L"守りが消えている！　あと %d 秒で柱が戻る", std::max(0, (int)std::ceil(18.f - shieldDownT)));
-            R->FillRound(bx - 10, 62, bw + 20, 26, 13, left > 0 ? RGBA(0.15f, 0.2f, 0.45f, 0.85f) : RGBA(0.5f, 0.25f, 0.1f, 0.85f));
+            { InkPanel(bx - 10, 62, bw + 20, 26, 0.88f); R->FillRect(bx - 4, 66, 5, 18, left > 0 ? RGBA(0.15f, 0.2f, 0.45f, 0.85f) : RGBA(0.5f, 0.25f, 0.1f, 0.85f)); }
             R->Text(sb, bx - 10, 65, bw + 20, 22, 13, left > 0 ? RGBA(0.75f, 0.85f, 1.f) : RGBA(1, 0.9f, 0.6f), 1, true, false);
             topY = 96;
         }
-    }
-    // 目的
-    {
-        const wchar_t* objs[3] = { L"鍵持ちを倒して次の階へ", L"ジオラマパーツを集める", L"宝箱を探す" };
-        std::wstring s = std::wstring(L"目的：") + objs[objective];
-        R->FillRound(W / 2 - 190, topY, 380, 32, 16, RGBA(0.05f, 0.07f, 0.13f, 0.6f));
-        R->Text(s, W / 2 - 190, topY + 5, 380, 26, 16, RGBA(1, 0.92f, 0.7f), 1, true);
-        topY += 38;
     }
 
     // 右下：アイテム
@@ -456,8 +523,8 @@ void Game::DrawDungeonUI()
     for (int i = 0; i < ITEM_N; i++)
     {
         float x = W - ITEM_N * 78 - 14 + i * 78, y = H - 112;
-        R->FillRound(x, y, 70, 70, 10, RGBA(0.05f, 0.07f, 0.13f, 0.78f));
-        R->StrokeRound(x, y, 70, 70, 10, items[i] > 0 ? icol[i] : RGBA(1, 1, 1, 0.2f), 2);
+        InkPanel(x, y, 70, 70, 0.78f);
+        R->FillRect(x + 8, y + 64, 54, 3, items[i] > 0 ? icol[i] : RGBA(1, 1, 1, 0.2f));
         R->FillCircle(x + 35, y + 30, 13, items[i] > 0 ? icol[i] : RGBA(0.3f, 0.3f, 0.3f));
         R->Text(inames[i], x, y + 46, 70, 20, 13, RGBA(1, 1, 1, 0.9f), 1, true);
         swprintf_s(buf, L"%d", i + 1);
@@ -470,16 +537,14 @@ void Game::DrawDungeonUI()
         R->Text(lantern <= 0 ? L"灯が消えた…体力が削られていく" : L"灯が消えかけている…", 0, H - 200, W, 30, 20, RGBA(1, 0.7f, 0.4f, 0.6f + 0.4f * std::sin(time * 4)), 1, true);
     if (!interactHint.empty() && !exitMenu && !menuOpen)
     {
-        R->FillRound(W / 2 - 190, H - 170, 380, 40, 20, RGBA(0.05f, 0.07f, 0.13f, 0.8f));
-        R->Text(interactHint, W / 2 - 190, H - 162, 380, 30, 18, RGBA(1, 0.92f, 0.7f), 1, true);
+        DrawInkHint(interactHint, W / 2, H - 170, 400);
     }
 
     if (exitMenu)
     {
         R->FillRect(0, 0, W, H, RGBA(0, 0, 0, 0.35f));
         float bw = 520, bh = 250, bx = (W - bw) / 2, by = (H - bh) / 2 - 20;
-        R->FillRound(bx, by, bw, bh, 16, RGBA(0.06f, 0.09f, 0.17f, 0.95f));
-        R->StrokeRound(bx + 5, by + 5, bw - 10, bh - 10, 12, RGBA(0.85f, 0.6f, 0.25f), 2);
+        InkPanel(bx, by, bw, bh, 0.95f);
         R->Text(L"封印が解けた", bx, by + 20, bw, 34, 26, RGBA(1, 0.9f, 0.7f), 1, true);
         std::wstring block = floorNo < MAX_FLOOR ? FloorBlock(floorNo + 1) : L"";
         bool lockNext = !block.empty();
@@ -491,8 +556,8 @@ void Game::DrawDungeonUI()
         {
             float y = by + 82 + i * 64;
             bool sel = exitSel == i;
-            R->FillRound(bx + 40, y, bw - 80, 50, 10, sel ? RGBA(0.98f, 0.94f, 0.85f) : RGBA(1, 1, 1, 0.08f));
-            R->Text(opts[i], bx + 40, y + 11, bw - 80, 30, 19, sel ? RGBA(0.12f, 0.15f, 0.25f) : RGBA(1, 1, 1, 0.9f), 1, true, !sel);
+            InkRow(bx + 40, y, bw - 80, 50, sel);
+            R->Text(opts[i], bx + 40, y + 11, bw - 80, 30, 19, sel ? RGBA(0.16f, 0.12f, 0.1f) : RGBA(1, 1, 1, 0.9f), 1, true, !sel);
         }
         R->Text(L"W/S：選択　Enter：決定", bx, by + bh - 34, bw, 24, 14, RGBA(1, 1, 1, 0.6f), 1);
     }
@@ -509,19 +574,14 @@ void Game::DrawDungeonUI()
         if (bossShown) { lx = W - lw - 18; ly = my0 + DN * ms + 64; }
         if (!(boss && bossShown))
         {
-        R->FillRound(lx, ly, lw, 44, 10, RGBA(0.05f, 0.07f, 0.13f, 0.8f));
-        R->StrokeRound(lx, ly, lw, 44, 10, RGBA(1, 0.45f, 0.35f), 2);
+        InkPanel(lx, ly, lw, 44, 0.8f);
+        R->FillRect(lx + 2, ly + 8, 4, 28, RGBA(1, 0.45f, 0.35f));
         R->Text(std::wstring(L"ロックオン：") + EnemyName(e.t) + (e.keyHolder ? L"（鍵）" : L""), lx, ly + 3, lw, 22, 15, RGBA(1, 0.9f, 0.85f), 1, true);
         Bar(lx + 16, ly + 28, lw - 32, 8, e.hp / e.maxHp, RGBA(0.9f, 0.3f, 0.3f), RGBA(0.15f, 0.12f, 0.15f, 0.9f));
         }
     }
     if (qteOn) DrawQTEUI();
     if (menuOpen) DrawMenuUI();
-
-    R->FillRect(0, H - 30, W, 30, RGBA(0.04f, 0.05f, 0.1f, 0.65f));
-    const wchar_t* rc = d.badger ? L"右クリック 旋回防御" : L"右クリック長押し 溜め";
-    swprintf_s(buf, L"WASD 移動　Shift ダッシュ　左クリック 攻撃　%s　Space 回避　Q ロックオン（R・ホイールで切替）　V カメラを背後へ　E 調べる　Tab 交代　Esc メニュー", rc);
-    R->Text(buf, 0, H - 26, W, 24, 14, RGBA(1, 1, 1, 0.8f), 1, false, false);
 }
 
 // ------------------------------------------------------------------
@@ -607,13 +667,12 @@ void Game::DrawMenuUI()
     float W = (float)R->W, H = (float)R->H;
     R->FillRect(0, 0, W, H, RGBA(0.02f, 0.03f, 0.06f, 0.55f));
     float bw = 900, bh = 470, bx = (W - bw) / 2, by = (H - bh) / 2;
-    R->FillRound(bx, by, bw, bh, 16, RGBA(0.06f, 0.09f, 0.17f, 0.96f));
-    R->StrokeRound(bx + 5, by + 5, bw - 10, bh - 10, 12, RGBA(0.85f, 0.6f, 0.25f), 2);
+    InkPanel(bx, by, bw, bh, 0.96f);
     for (int i = 0; i < kTabN; i++)
     {
         float tx = bx + 24 + i * 143;
         bool sel = menuTab == i;
-        R->FillRound(tx, by + 18, 134, 40, 20, sel ? RGBA(0.85f, 0.55f, 0.2f) : RGBA(1, 1, 1, 0.08f));
+        InkTab(tx, by + 18, 134, 40, sel);
         R->Text(kTabs[i], tx, by + 26, 134, 30, 17, RGBA(1, 1, 1), 1, true, false);
     }
     float lx = bx + 40, ly = by + 84;
@@ -621,9 +680,9 @@ void Game::DrawMenuUI()
     auto row = [&](int i, const std::wstring& s, const std::wstring& right, D2D1_COLOR_F c = RGBA(1, 1, 1)) {
         float y = ly + i * 50.f;
         bool sel = menuSel == i;
-        R->FillRound(lx, y, bw - 80, 42, 10, sel ? RGBA(0.98f, 0.94f, 0.85f) : RGBA(1, 1, 1, 0.06f));
-        R->Text(s, lx + 16, y + 9, 520, 28, 18, sel ? RGBA(0.12f, 0.15f, 0.25f) : c, 0, true, !sel);
-        R->Text(right, lx + 300, y + 10, bw - 400, 28, 15, sel ? RGBA(0.3f, 0.35f, 0.45f) : RGBA(1, 1, 1, 0.7f), 2, false, !sel);
+        InkRow(lx, y, bw - 80, 42, sel);
+        R->Text(s, lx + 16, y + 9, 520, 28, 18, sel ? RGBA(0.16f, 0.12f, 0.1f) : c, 0, true, !sel);
+        R->Text(right, lx + 300, y + 10, bw - 400, 28, 15, sel ? RGBA(0.42f, 0.34f, 0.28f) : RGBA(1, 1, 1, 0.7f), 2, false, !sel);
     };
     Actor& A = party[active];
     switch (menuTab)
