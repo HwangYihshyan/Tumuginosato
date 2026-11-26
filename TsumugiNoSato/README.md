@@ -7,7 +7,6 @@ C++17 / DirectX 11 / HLSL。企画書 第2版をもとにした第1章の試作�
 ```
 build.bat                      … bin\TsumugiNoSato.exe ができる
 bin\TsumugiNoSato.exe          … 通常プレイ
-bin\TsumugiNoSato.exe --autoshot Screenshots   … 自動デモを流してプレイ画面を87枚保存して終了（確認結果は *_test.txt・dungeon_test.txt・village_test.txt）
 ```
 
 ## ゲームの流れ
